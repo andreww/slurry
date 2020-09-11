@@ -136,3 +136,8 @@ dmypy.json
 
 # Cython debug symbols
 cython_debug/
+.ipynb_checkpoints/SiO2-checkpoint.ipynb
+.ipynb_checkpoints/SiO2_new-checkpoint.ipynb
+.ipynb_checkpoints/slurryTS-checkpoint.ipynb
+.ipynb_checkpoints/slurryTS-checkpoint.ipynb
+.ipynb_checkpoints/slurryTS-checkpoint.ipynb
