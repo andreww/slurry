@@ -141,3 +141,4 @@ cython_debug/
 .ipynb_checkpoints/slurryTS-checkpoint.ipynb
 .ipynb_checkpoints/slurryTS-checkpoint.ipynb
 .ipynb_checkpoints/slurryTS-checkpoint.ipynb
+*.pdf
