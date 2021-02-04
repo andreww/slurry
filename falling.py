@@ -54,7 +54,7 @@ def fzhang_opt(u, rad, mu, g, drho, rhol):
     return result
 
 
-def calculate_timescales(r, mu, g, drho, rhol, kappa, Dliq, rf, ri):
+def calculate_boundary_layers(r, mu, g, drho, rhol, kappa, Dliq, rf, ri):
     """
     Obtain the timescales that depend on the flow velocity: 
     1. The Stokes flow timescale, tVh
@@ -100,3 +100,26 @@ def calculate_timescales(r, mu, g, drho, rhol, kappa, Dliq, rf, ri):
         j = j + 1
         
     return tVh, PeT, PeC, deltaT, deltaC, tt_liq, tl_liq
+
+
+def calculate_diffusion_and_freefall_times(r, mu, g, drho, rhol, kappa, Dliq, Dsol, rf, ri):
+    
+    # Calculate diffusion and freefall timescales
+    tt = np.zeros(len(r))  # Thermal diffusion time
+    ts = np.zeros(len(r))  # Chemical diffusion in solid
+    tl = np.zeros(len(r))  # Chemical diffusion in liquid
+    tVl= np.zeros(len(r))  # Timescale based on Stokes velocity Vs
+
+    # All timescales in yrs
+    j = 0
+    for i in r:    
+        tt[j] = i**2/kappa/secinyr
+        ts[j] = i**2/Dsol/secinyr
+        tl[j] = i**2/Dliq/secinyr
+    
+        Vs    = 2.0 * drho * g * i**2 / (9.0 * mu * rhol)
+        tVl[j]= (rf-ri)/Vs/secinyr
+    
+        j = j + 1
+        
+    return tt, ts, tl, tVl
