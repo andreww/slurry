@@ -33,3 +33,11 @@ Sc = mu / Dliq
 print("Pr = ", Pr, ' Sc = ', Sc)
 
 r = np.logspace(-8,3,num=100)     # Array of particle sizes in metres
+
+# Properties of copper (for growth... need to fix)
+cu_k0 = 212 # [K^-1]? Table 2
+cu_tm = 1275 # [K] Table 1
+cu_dhm = 1.21 * kb * cu_tm # [J] SI table S1, heat of fusion at melting point
+
+cu_mass = 1.055e-25
+cu_k04  =np.sqrt(3.0*kb*cu_tm/cu_mass)
