@@ -2,7 +2,6 @@
 
 import numpy as np
 import scipy.optimize as spo
-import numba
 
 import thermodynamic_model
 
@@ -225,3 +224,50 @@ def find_liquidus_compositions(p, t):
         x_feo_side = 1.0
         
     return x_fe_side, x_feo_side
+
+@np.vectorize
+def phase_relations_molar(x, p, t):
+    """
+    Details of the equilbrium assemblage
+    
+    For composition x (mole fraction Fe), p (GPa) and t (K) 
+    return the mole fraction liquid (phi_lq), the mole fraction Fe 
+    (phi_fe), the mole fraction FeO (phi_feo), and the liquid
+    composition (as a mole fraction, x_lq)
+    """
+    # first get the liquidus compositions
+    x_fe_side, x_feo_side = find_liquidus_compositions(p, t)
+    
+    if (x <= x_fe_side) and (x >= x_feo_side):
+        # pure liquid
+        phi_lq = 1.0
+        x_lq = x
+        phi_fe = 0.0
+        phi_feo = 0.0
+        phi_solid = 0.0
+    elif x_fe_side < x_feo_side:
+        # below eutectic
+        phi_lq = 0.0
+        x_lq = np.nan
+        phi_fe = x
+        phi_feo = 1.0 - x
+        phi_solid = 1.0
+    elif x > x_fe_side:
+        # Fe + liquid
+        x_lq = x_fe_side
+        phi_lq = (1.0 - x) / (1.0 - x_lq)
+        phi_fe = 1.0 - phi_lq
+        phi_feo = 0.0
+        phi_solid = phi_fe
+    elif x < x_feo_side:
+        # FeO + liquid
+        x_lq = x_feo_side
+        phi_lq = x / x_lq
+        phi_feo = 1.0 - phi_lq
+        phi_fe = 0.0
+        phi_solid = phi_feo
+    else:
+        print("Error case:", x, p, t, x_fe_side, x_feo_side)
+        assert False, "something went wrong"
+        
+    return x_lq, phi_fe, phi_lq, phi_feo, phi_solid
