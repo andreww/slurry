@@ -5,6 +5,11 @@ import scipy.optimize as spo
 
 import thermodynamic_model
 
+# Physical constants
+avogadro = 6.02214E23
+fe_molar_mass = 55.845 # g/mol
+o_molar_mass = 15.9994 # g/mol
+feo_molar_mass = fe_molar_mass + o_molar_mass
 
 # Thermodynamic parameters!
 #
@@ -271,3 +276,80 @@ def phase_relations_molar(x, p, t):
         assert False, "something went wrong"
         
     return x_lq, phi_fe, phi_lq, phi_feo, phi_solid
+
+
+def liquid_molar_volume(x, p, t):
+    """
+    Return the molar volumes of liquid and components
+    
+    x: composition (in mol fraction Fe)
+    p: pressure (in GPa)
+    t: temperature (in K)
+    Returns volume of mixture, volume of Fe liquid and
+    volume of FeO liquid at these x, t and p in cm^3/mol.
+    Ideal mixture so no excess volume (or enthalpy) of mixing.
+    """
+    fe_vol = thermodynamic_model.expand_volume(
+        thermodynamic_model.vinet_eos_volumes(p, fe_liquid_v0, fe_liquid_k0, fe_liquid_kp),
+        t, fe_liquid_v0, fe_liquid_a0, fe_liquid_ag0, fe_liquid_k)
+    feo_vol = thermodynamic_model.expand_volume(
+        thermodynamic_model.vinet_eos_volumes(p, feo_liquid_v0, feo_liquid_k0, feo_liquid_kp),
+        t, feo_liquid_v0, feo_liquid_a0, feo_liquid_ag0, feo_liquid_k)
+    liquid_vol = x*fe_vol + (1.0-x)*feo_vol
+    return liquid_vol, fe_vol, feo_vol
+
+
+def solid_molar_volume(x, p, t):
+    """
+    Return the molar volumes of solid mixture and components
+    
+    x: composition (in mol fraction Fe)
+    p: pressure (in GPa)
+    t: temperature (in K)
+    Returns volume of mechanical mixture, volume of HCP Fe and
+    volume of solid FeO at these x, t and p in cm^3/mol.
+    """
+    fe_vol = thermodynamic_model.expand_volume(
+        thermodynamic_model.vinet_eos_volumes(p, fe_hcp_v0, fe_hcp_k0, fe_hcp_kp),
+        t, fe_hcp_v0, fe_hcp_a0, fe_hcp_ag0, fe_hcp_k)
+    feo_vol = thermodynamic_model.expand_volume(
+        thermodynamic_model.vinet_eos_volumes(p, feo_solid_v0, feo_solid_k0, feo_solid_kp),
+        t, feo_solid_v0, feo_solid_a0, feo_solid_ag0, feo_solid_k)
+    mixture_vol = x*fe_vol + (1.0-x)*feo_vol
+    return mixture_vol, fe_vol, feo_vol
+
+
+@np.vectorize
+def densities(x, p, t):
+    """
+    Return the density of all the phases and components
+    
+    in kg/m^3
+    """
+    # Evalute volumes seperatly - we may enable non-ideal behaviour one day
+    liquid_vol, fe_liquid_vol, feo_liquid_vol = liquid_molar_volume(x, p, t)
+    solid_mixture_vol, fe_hpc_vol, feo_solid_vol = solid_molar_volume(x, p, t)
+    liquid_density = 1000.0 * ( x * fe_molar_mass + (1.0 - x) * feo_molar_mass) / liquid_vol
+    solid_mixture_density = 1000.0 * ( x * fe_molar_mass + (1.0 - x) * feo_molar_mass) / solid_mixture_vol
+    fe_liquid_density = 1000.0 * fe_molar_mass / fe_liquid_vol
+    fe_hpc_density = 1000.0 * fe_molar_mass / fe_hpc_vol
+    feo_solid_density = 1000.0 * feo_molar_mass / feo_solid_vol
+    feo_liquid_density = 1000.0 * feo_molar_mass / feo_liquid_vol
+    return liquid_density, solid_mixture_density, fe_liquid_density, fe_hpc_density, \
+           feo_liquid_density, feo_solid_density
+
+
+def mass_percent_o(mol_frac_fe):
+    """
+    Return the mass fraction O
+    """
+    total_mass = mol_frac_fe * fe_molar_mass + (1.0 - mol_frac_fe) * feo_molar_mass
+    o_mass = (1.0 - mol_frac_fe) * o_molar_mass
+    return 100.0 * o_mass / total_mass
+
+
+def mol_frac_fe(o_mass_percent):
+    fe_mass_percent = 100.0 - o_mass_percent
+    mol_o = (o_mass_percent/100.0) / o_molar_mass
+    mol_fe = (fe_mass_percent/100.0) / fe_molar_mass
+    return 1.0 - (mol_o / mol_fe)
