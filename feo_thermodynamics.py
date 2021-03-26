@@ -278,6 +278,21 @@ def phase_relations_molar(x, p, t):
     return x_lq, phi_fe, phi_lq, phi_feo, phi_solid
 
 
+def volume_fraction_solid(x, p, t):
+    """
+    Calculate the volume fraction solid at x, p and t
+    
+    Needs to get the phase relations and phase volumes...
+    """
+    x_lq, phi_fe, phi_lq, phi_feo, phi_solid = phase_relations_molar(x, p, t)
+    liquid_vol, fe_liquid_vol, feo_liquid_vol = liquid_molar_volume(x, p, t)
+    solid_mixture_vol, fe_hpc_vol, feo_solid_vol = solid_molar_volume(x, p, t)
+    
+    total_liquid_volume = liquid_vol * phi_lq
+    total_solid_volume = (fe_hpc_vol * phi_fe) + (feo_solid_vol * phi_feo)
+    return total_solid_volume/(total_solid_volume+total_liquid_volume)
+    
+
 def liquid_molar_volume(x, p, t):
     """
     Return the molar volumes of liquid and components
