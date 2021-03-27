@@ -368,3 +368,57 @@ def mol_frac_fe(o_mass_percent):
     mol_o = (o_mass_percent/100.0) / o_molar_mass
     mol_fe = (fe_mass_percent/100.0) / fe_molar_mass
     return 1.0 - (mol_o / mol_fe)
+
+
+def _liquidus_error_fe_side(t, x, p):
+    """
+    For optimising t to find x that matches target
+    """
+    x_fe_side, _ = find_liquidus_compositions(p, t)
+    delta_x_fe_side = x_fe_side - x
+    return delta_x_fe_side
+
+def _liquidus_error_feo_side(t, x, p):
+    """
+    For optimising t to find x that matches target
+    """
+    _, x_feo_side = find_liquidus_compositions(p, t)
+    delta_x_feo_side = x_feo_side - x
+    return delta_x_feo_side
+
+
+@np.vectorize
+def find_liquidus(x, p):
+    """
+    Find the liquidus temperature for this composition and pressure
+    
+    x: mol fraction Fe
+    p: pressure in GPa
+    
+    returns liquidus temperature in K
+    """
+    if x == 0:
+        # FeO melting temperature
+        tl = thermodynamic_model.end_member_melting_temperatures(p, feo_liquid_a, feo_liquid_b,
+                 feo_liquid_c, feo_liquid_d, feo_liquid_e, feo_liquid_f,
+                 feo_liquid_v0, feo_liquid_k0, feo_liquid_kp,
+                 feo_liquid_a0, feo_liquid_ag0, feo_liquid_k,
+                 feo_solid_a, feo_solid_b, feo_solid_c, 
+                 feo_solid_d, feo_solid_e, feo_solid_f,
+                 feo_solid_v0, feo_solid_k0, feo_solid_kp,
+                 feo_solid_a0, feo_solid_ag0, feo_solid_k)
+    elif x == 1.0:
+        # Fe melting temperature
+        tl = thermodynamic_model.end_member_melting_temperatures(p, fe_liquid_a, fe_liquid_b,
+                 fe_liquid_c, fe_liquid_d, fe_liquid_e, fe_liquid_f,
+                 fe_liquid_v0, fe_liquid_k0, fe_liquid_kp,
+                 fe_liquid_a0, fe_liquid_ag0, fe_liquid_k,
+                 fe_hcp_a, fe_hcp_b, fe_hcp_c, 
+                 fe_hcp_d, fe_hcp_e, fe_hcp_f,
+                 fe_hcp_v0, fe_hcp_k0, fe_hcp_kp,
+                 fe_hcp_a0, fe_hcp_ag0, fe_hcp_k)
+    else:
+        tl_fe = spo.brentq(_liquidus_error_fe_side, 2000.0, 8000.0, args=(x, p))
+        tl_feo = spo.brentq(_liquidus_error_feo_side, 2000.0, 8000.0, args=(x, p))
+        tl = max(tl_fe, tl_feo)
+    return tl
