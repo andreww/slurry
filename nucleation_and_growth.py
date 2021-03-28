@@ -1,5 +1,5 @@
 import numpy as np
-import phase_equilibrium
+import feo_thermodynamics
 import params
 
 
@@ -38,7 +38,7 @@ def tauv(dT, Tm):
     return tau_v 
 
 
-def tau_phase_TO(rad, T_abs, O_abs):
+def tau_phase_TO(rad, T_abs, O_abs, p=330.0):
     
     """Calculate the phase equilibrium timescale tau_P = N*tau_N + tau_G
     as a function of absolute temperature T_abs and O concentration O_conc. 
@@ -53,13 +53,12 @@ def tau_phase_TO(rad, T_abs, O_abs):
     time = 0 
     for t in T_abs:
         oo = 0
+        print("t = ", t)
         for o in O_abs: 
-            x_fe, x_lq, x_feo, phi_fe, phi_lq, phi_feo, x_liquidus, t_liquidus = \
-            phase_equilibrium.phase_relations_komabayashi2004(t, o)
-            v_f = phase_equilibrium.volume_fraction_solid(phi_fe, phi_lq, x_lq) # eq sol vol @ this T & c
-        
-            dT  = t - t_liquidus 
-        
+            v_f = feo_thermodynamics.volume_fraction_solid(feo_thermodynamics.mol_frac_fe(o*100.0), p, T_abs)[0]
+            t_liquidus = feo_thermodynamics.find_liquidus(feo_thermodynamics.mol_frac_fe(o*100.0), p)
+            dT  = t - t_liquidus
+            print("o = ", o, "dT = ", dT)
             if dT > 0: continue
                 
             # Why do we need params.Vsl???
@@ -80,7 +79,7 @@ def tau_phase_TO(rad, T_abs, O_abs):
 
 # Really should take the loops out of this function, and the function above and merge
 # in a vectorised way over the input arguments.
-def tau_phase_r(r, Temp, Oconc): 
+def tau_phase_r(r, Temp, Oconc, p = 330.0): 
     
     """Calculate the phase equilibrium timescale tau_P = N*tau_N + tau_G
     as a function of radius r. 
@@ -91,10 +90,10 @@ def tau_phase_r(r, Temp, Oconc):
     ttot_r = np.zeros(len(r))
     rr     = 0
     for rad in r:
-        x_fe, x_lq, x_feo, phi_fe, phi_lq, phi_feo, x_liquidus, t_liquidus = \
-        phase_equilibrium.phase_relations_komabayashi2004(Temp, Oconc)
-        v_f = phase_equilibrium.volume_fraction_solid(phi_fe, phi_lq, x_lq) # eq sol vol @ this T & c
-        
+        print("rad = ", rad)
+        # eq sol vol @ this T & c
+        v_f = feo_thermodynamics.volume_fraction_solid(feo_thermodynamics.mol_frac_fe(Oconc*100.0), p, Temp)
+        t_liquidus = feo_thermodynamics.find_liquidus(feo_thermodynamics.mol_frac_fe(Oconc*100.0), p)
         dT  = Temp - t_liquidus 
         
         if dT > 0: continue
