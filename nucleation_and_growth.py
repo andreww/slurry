@@ -3,18 +3,22 @@ import feo_thermodynamics
 import params
 
 
-def sun_velocity_fit(dt, tm, dhm, k0):
+def sun_d_mu(dt, tm, dhm):
     """
-    dT is the undercooling
-    Tm is the melting temperature
-    dmu is the difference in chemical potentials
-    k0 is a rate constant
-    r is the particle radius
+    Return Sun's delta mu
     """
     t = tm - dt
-    d_mu = (tm - t) * (dhm / tm) # K13 / first para of Sun SI
+    d_mu = (tm - t) * (dhm / tm) # K13 / first para of Sun S
+    return d_mu
+
+def sun_velocity_fit(dmu, k0, t):
+    """
+    dmu is the difference in chemical potentials (solid - liquid) in J/mol
+    k0 is a rate constant
+    t is the absolute temperature
+    """
     kB = 1.380649e-23 #J/K
-    v = k0 * (1.0 - np.exp(-d_mu/(params.kb * t)))
+    v = k0 * (1.0 - np.exp(-dmu/(params.kb * t)))
     return v
 
 
