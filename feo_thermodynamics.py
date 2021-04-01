@@ -132,7 +132,6 @@ def liquid_free_energy(x_fe, p, t):
 # Avoid hand coding loops. 
 liquid_free_energies = np.vectorize(liquid_free_energy)
 
-
 def solid_free_energies(x_fe, p, t):
     """
     Free energy of the HCP Fe-FeO solid mixture and end members
