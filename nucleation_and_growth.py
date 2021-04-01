@@ -71,7 +71,8 @@ def tau_phase_TO(rad, T_abs, O_abs, p=330.0):
             N   = 3 * V_f / (4 * np.pi * rad**3) 
         
             tN[time,oo] = N * tauv(dT, t_liquidus) / params.Vsl / params.secinyr
-            G           = sun_velocity_fit(-dT, t_liquidus, params.cu_dhm, params.cu_k0) # CHK dT DEF POSITIVE!
+            
+            G           = sun_velocity_fit(sun_d_mu(-dT, t_liquidus, params.cu_dhm), params.cu_k0, t)  # CHK dT DEF POSITIVE!
             tG[time,oo] = rad/G/params.secinyr
         
             ttot_TO[time,oo] = tN[time,oo] + tG[time,oo]
@@ -106,7 +107,7 @@ def tau_phase_r(r, Temp, Oconc, p = 330.0):
         N   = 3 * V_f / (4 * np.pi * rad**3) 
         
         tN_r = N * tauv(dT, t_liquidus) / params.Vsl / params.secinyr
-        G_r  = sun_velocity_fit(-dT, t_liquidus, params.cu_dhm, params.cu_k0) # CHK dT DEF POSITIVE!
+        G_r  = sun_velocity_fit(sun_d_mu(-dT, t_liquidus, params.cu_dhm), params.cu_k0, Temp) # CHK dT DEF POSITIVE!
         tG_r = rad/G_r/params.secinyr
     
         ttot_r[rr] = tN_r + tG_r
