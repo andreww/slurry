@@ -213,17 +213,22 @@ def find_liquidus_compositions(p, t):
     _, g_fe_solid, g_feo_solid = solid_free_energies(0.5, p, t)
 
     if _delta_mu_fe_liquid(1.0, p, t, g_fe_solid) <= 0.0:
-        x_fe_side = 1.0 # above pure phase melting T
+        x_fe_side = 1.0 # mul < mus: above pure Fe phase melting T
+                        # corresponds to lhd of phase diagram
     else:
+        # Minimise chem pot difference
+        # 1D optimisation to find liquid comp given that solid comp is known. 
         x_fe_side = spo.brentq(_delta_mu_fe_liquid, 0.000000001, 1.0, args=(p, t, g_fe_solid))
-
+        
     if _delta_mu_feo_liquid(0.0, p, t, g_feo_solid) <= 0.0:
+        # Arg1 is x_fe (=0 for FeO)
         x_feo_side = 0.0 # above pure phase melting T
     else:
         x_feo_side = spo.brentq(_delta_mu_feo_liquid, 0.0, 0.999999999, args=(p, t, g_feo_solid))
         
     if x_fe_side < x_feo_side:
         # below eutectic?
+        # At eutectic liquidi cross. Set composition to opposite side of phase diagram. 
         x_fe_side = 0.0
         x_feo_side = 1.0
         
