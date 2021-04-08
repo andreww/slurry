@@ -39,7 +39,7 @@ def _pressure_error(v, v0, k0, kp, p_target):
 @numba.jit
 def vinet_eos_pressure(v, v0, k0, kp):
     """
-    Return the pressure at some volume
+    Return the pressure at some volume according to K14 eqn (3)
     
     Given 1 bar reference volume (v0), bulk modulus (k0),
     and its pressure derivative (kp) return the pressure
@@ -82,7 +82,7 @@ def expand_volume(v, t, v0, a0, ag0, k):
     # Thermal expansion is 1/V dV/dT so integrate to find V
     # assume thermal expanion is not temperature dependent
     # but note that volume expansion is large so we need to 
-    # solve differentail exuation (analytical solution now)
+    # solve differential equation above (analytical solution now)
     a = thermal_expansion(v, v0, a0, ag0, k)    
     v = v + v * (np.exp(a*t - a*298.0) - 1.0)
     
@@ -95,10 +95,10 @@ def end_member_free_energy(p, t, a, b, c, d, e, f, v0, k0, kp, a0, ag0, k):
     ps = np.arange(p+dp, step=dp) # in GPa
     vs = vinet_eos_volumes(ps, v0, k0, kp)
     vs = expand_volume(vs, t, v0, a0, ag0, k) # in cm^3/mol
-    # Worry about units here??? GPa and cm^3?
-    vdp = np.trapz(vs * 1.0E-6, ps * 1.0E9) # convert to m^3 and Pa -> J
+    # Worry about units here -> GPa and cm^3 converted to Pa and m^3
+    vdp = np.trapz(vs * 1.0E-6, ps * 1.0E9) 
     g_onebar = free_energy_onebar(t, a, b, c, d, e, f)
-    g_pt = g_onebar + vdp
+    g_pt = g_onebar + vdp                     # Result in J
     return g_pt
 
 
