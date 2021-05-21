@@ -73,7 +73,7 @@ def calculate_boundary_layers(r, mu, g, drho, rhol, kappa, Dliq, rf, ri):
     j = 0 # TODO: learn about enumerate
     for i in r:
         rad        = np.float(i)
-        Vs         = scipy.optimize.brentq(fzhang_opt, -1.0, 100.0, args=(rad, mu, g, drho, rhol))
+        Vs         = scipy.optimize.brentq(fzhang_opt, -1.0, 100.0, args=(rad, mu, g, drho, rhol), disp=True)
         Re, Cd, uX = fzhang(Vs, rad, mu, g, drho, rhol)
         Sc = mu / Dliq
         Pr = mu / kappa
