@@ -339,7 +339,7 @@ def solid_molar_volume(x, p, t):
 
 
 @np.vectorize
-def densities(x, p, t):
+def densities_func(x, p, t):
     """
     Return the density of all the phases and components
     
@@ -356,6 +356,15 @@ def densities(x, p, t):
     feo_liquid_density = 1000.0 * feo_molar_mass / feo_liquid_vol
     return liquid_density, solid_mixture_density, fe_liquid_density, fe_hpc_density, \
            feo_liquid_density, feo_solid_density
+
+# Crap hack to avoid a warning (which seems to be spurious)
+# see https://github.com/andreww/slurry/issues/8
+def densities(x, p, t):
+    oldsettings = np.seterr(all='ignore')
+    results = densities_func(x, p, t)
+    np.seterr(**oldsettings)
+    return results
+
 
 
 def mass_percent_o(mol_frac_fe):
