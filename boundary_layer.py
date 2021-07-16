@@ -112,15 +112,17 @@ def diffusion_growth_rate(rp, xi, delta, rtot, temperature, pressure, dl, k0, de
     """
     xp, root_result = spo.brentq(_total_composition_error, 1.0E-12, 1.0-1.0E-12, 
                                  args=(rp, xi, delta, rtot, temperature, pressure, dl, k0, debug),
-                                 xtol=2.0e-14, disp=True, full_output=True)
+                                 xtol=2.0e-13, disp=True, full_output=True)
     if debug:
         print(root_result)
     v  = growth.growth_velocity_feo(xp, pressure, temperature, k0)
+    if debug:
+        print("Thermodynamic growth rate:", v)
     xl = xp + (delta*xp)/dl * v
     error = _total_composition_error(xp, rp, xi, delta, rtot, temperature, pressure, dl, k0)
     return v, xp, xl, error
 
-def dy_by_dt(t, y, xi, rtot, temperature, pressure, dl, k0, g, mu, icbr, verbose=False):
+def dy_by_dt(t, y, xin, rtot, temperaturein, pressurein, dl, k0, gin, mu, icbr, verbose=False):
     """
     Find the growth rate and sinking rate of a particle at time t
     
@@ -132,8 +134,32 @@ def dy_by_dt(t, y, xi, rtot, temperature, pressure, dl, k0, g, mu, icbr, verbose
     """
     rp = y[0]
     z = y[1]
+    
+    # Composition, temperature and pressure could be functions of radius (z)
+    # but they will not change during a call (i.e. during an ODE time step)
+    if callable(xin):
+        xi = xin(z)
+    else:
+        xi = xin
+        
+    if callable(temperaturein):
+        temperature = temperaturein(z)
+    else:
+        temperature = temperaturein
+        
+    if callable(pressurein):
+        pressure = pressurein(z)
+    else:
+        pressure = pressurein
+        
+    if callable(gin):
+        g = gin(z)
+    else:
+        g = gin
+    
     if verbose:
         print('Derivative evaluation at', t, 's, at z=', z, ',rp = ', rp)
+        print('At this point T =', temperature, 'K, P =', pressure, 'GPa, xi =', xi, '(mol frac Fe), g =', g, 'm/s^2')
     # Find liquid composition assuming no boundary layer (or we could do the whole thing
     # inside yet another self conssitent loop - no thanks).
     xl_no_bl = spo.brentq(_total_composition_well_mixed_error, 0.00000001, 0.999999999, 
@@ -153,6 +179,13 @@ def dy_by_dt(t, y, xi, rtot, temperature, pressure, dl, k0, g, mu, icbr, verbose
     delta = delta[0] # Proper vectoriziation of calc boundary layers needed
     # Particle growth rate
     v, xp, xl, error = diffusion_growth_rate(rp, xi, delta, rtot, temperature, pressure, dl, k0)
+    if verbose:
+        print('Initial guess at liquid composition:', xl_no_bl)
+        print('Gives density contrast of:', delta_rho, 'kg/m^3, falling velocity', v_falling, 
+              'm/s and BL thickness', delta, 'm')
+        print('Gives growth rate', v, 'm/s, boundary composition', xp, 'bulk composition', 
+              xl, 'and error', error)
+    
     return [v, v_falling]
 
 def hit_icb(t, y, xi, rtot, temperature, pressure, dl, k0, g, mu, icbr, verbose=False):
@@ -166,6 +199,16 @@ def hit_icb(t, y, xi, rtot, temperature, pressure, dl, k0, g, mu, icbr, verbose=
     height = z - icbr
     return height
 
+def dissolved(t, y, xi, rtot, temperature, pressure, dl, k0, g, mu, icbr, verbose=False):
+    """
+    Return the radius of the particle. 
+    
+    As this is zero if a particle dissolves, this can be patched to use
+    as a stop condition
+    """
+    rp = y[0]
+    return rp
+
 def falling_growing_particle_solution(start_time, max_time, initial_particle_size, initial_particle_position,
                                       xi, rtot, t, p, dl, k0, g, mu, radius_inner_core):
     """
@@ -174,14 +217,15 @@ def falling_growing_particle_solution(start_time, max_time, initial_particle_siz
     This is really just a thin wrapper around the IVP solver with some error
     checking
     """
-    # We need to stop if we hit the ICB. Patch the function
+    # We need to stop if we hit the ICB or disolve. Patch the function
     # with a 'terminal' property...
     hit_icb.terminal = True
+    dissolved.terminal = True
 
     # Solve the IVP
     sol = spi.solve_ivp(dy_by_dt, [start_time, max_time], [initial_particle_size, initial_particle_position], 
                     args=(xi, rtot, t, p, dl, k0, g, mu, radius_inner_core),
-                    events=hit_icb, dense_output=True)
+                    events=[hit_icb, dissolved], dense_output=True)
     
     # Check solution
     assert sol.status >= 0, "IVP failed"
