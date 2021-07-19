@@ -209,8 +209,24 @@ def dissolved(t, y, xi, rtot, temperature, pressure, dl, k0, g, mu, icbr, verbos
     rp = y[0]
     return rp
 
+def make_event(r_event):
+    """
+    Returns a function that can be used to trigger an event if particle is at some radous r_event (m)
+    """
+    def event_func(t, y, xi, rtot, temperature, pressure, dl, k0, g, mu, icbr, verbose=False):
+        """
+        Return height above r_event
+    
+        As this is zero when the particle hits the depth of interest
+        """
+        z = y[1]
+        height = z - r_event
+        return height
+    return event_func
+    
+
 def falling_growing_particle_solution(start_time, max_time, initial_particle_size, initial_particle_position,
-                                      xi, rtot, t, p, dl, k0, g, mu, radius_inner_core):
+                                      xi, rtot, t, p, dl, k0, g, mu, radius_inner_core, analysis_radii=None):
     """
     Solve falling particle problem as IVP and return solution bunch object
     
@@ -221,11 +237,17 @@ def falling_growing_particle_solution(start_time, max_time, initial_particle_siz
     # with a 'terminal' property...
     hit_icb.terminal = True
     dissolved.terminal = True
+    event_handles = [hit_icb, dissolved]
+    
+    # Set up depths for post-run analysis (e.g. for self consistent loop)
+    if analysis_radii is not None:
+        for r_event in analysis_radii:
+            event_handles.append(make_event(r_event))
 
     # Solve the IVP
     sol = spi.solve_ivp(dy_by_dt, [start_time, max_time], [initial_particle_size, initial_particle_position], 
                     args=(xi, rtot, t, p, dl, k0, g, mu, radius_inner_core),
-                    events=[hit_icb, dissolved], dense_output=True)
+                    events=event_handles, dense_output=True)
     
     # Check solution
     assert sol.status >= 0, "IVP failed"
