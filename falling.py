@@ -25,6 +25,12 @@ def fzhang(u, r, mu, g, drho, rhol):
     
     Re  = np.abs(2*r * u / mu)                                              # Eqn 1  of ZX02
     Cd  = (24.0/Re) * (1.0 + 0.15*Re**0.687) + 0.42/(1.0 + 42500*Re**-1.16) # Eqn 19 of ZX02
+    if r < 0.0:
+        # Is the particle is dissolving we'll end up calling this with a negative r
+        # while looking for the stop condition (corresponding to r=0). Nan for the 
+        # velocity seems to make sense and work (and avoids a runtime warning)
+        return Re, Cd, np.nan
+    # FIXME: what if drho is negative - do we need to use the magnitude and set the sign of u?? FIXME
     unum= 8.0 * g * r * drho                                                # Eqn 20 of ZX02
     uden= 3.0 * rhol * Cd                                                   # Eqn 20 of ZX02
     u   = np.sqrt(unum/uden)
@@ -42,7 +48,8 @@ def fzhang_opt(u, rad, mu, g, drho, rhol):
     drho = solid-liquid density difference
     rhol = liquid density
     """
-    
+    if rad < 0.0:
+        return np.nan # See above.
     re = np.abs(2*rad*u/mu)
 
     result = (8.0 * g * rad * drho) / (3.0 * rhol * 
