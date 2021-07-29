@@ -122,7 +122,7 @@ def diffusion_growth_rate(rp, xi, delta, rtot, temperature, pressure, dl, k0, de
     error = _total_composition_error(xp, rp, xi, delta, rtot, temperature, pressure, dl, k0)
     return v, xp, xl, error
 
-def dy_by_dt(t, y, xin, rtot, temperaturein, pressurein, dl, k0, gin, mu, icbr, verbose=False):
+def dy_by_dt(t, y, xin, rtotin, temperaturein, pressurein, dl, k0, gin, mu, icbr, verbose=False):
     """
     Find the growth rate and sinking rate of a particle at time t
     
@@ -156,6 +156,11 @@ def dy_by_dt(t, y, xin, rtot, temperaturein, pressurein, dl, k0, gin, mu, icbr, 
         g = gin(z)
     else:
         g = gin
+        
+    if callable(rtotin):
+        rtot = rtotin(z)
+    else:
+        rtot = rtotin    
     
     if verbose:
         print('Derivative evaluation at', t, 's, at z=', z, ',rp = ', rp)
