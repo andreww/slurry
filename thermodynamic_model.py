@@ -7,6 +7,8 @@ import numba
 
 # cannot jit due to brentq. Can we
 # rearange EOS in terms of V to avoid?
+# NB: this is easily the biggest cost from profiling! 
+# maybe just build an interpolation and fit this? See issues...
 def vinet_eos_volume(p, v0, k0, kp):
     """
     Return the volume at some pressure
