@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import numba
 import numpy as np
 import scipy.optimize as spo
 
@@ -87,6 +88,7 @@ feo_liquid_ag0 = 4.5
 feo_liquid_k = 1.4
 
 
+@numba.jit
 def liquid_free_energy(x_fe, p, t):
     """
     Free energy of the Fe-FeO liquid
@@ -132,6 +134,7 @@ def liquid_free_energy(x_fe, p, t):
 # Avoid hand coding loops. 
 liquid_free_energies = np.vectorize(liquid_free_energy)
 
+@numba.jit
 def solid_free_energies(x_fe, p, t):
     """
     Free energy of the HCP Fe-FeO solid mixture and end members
@@ -157,6 +160,7 @@ def solid_free_energies(x_fe, p, t):
     return g_mixture, g_fe, g_feo
 
 
+@numba.jit
 def fe_liquid_chemical_potential(x_fe, p, t):
     """
     Chemical potential of Fe in Fe-FeO liquid
@@ -175,7 +179,7 @@ def fe_liquid_chemical_potential(x_fe, p, t):
                                                   fe_liquid_v0, fe_liquid_k0, fe_liquid_kp,
                                                   fe_liquid_a0, fe_liquid_ag0, fe_liquid_k)
 
-
+@numba.jit
 def feo_liquid_chemical_potential(x_fe, p, t):
     """
     Chemical potential of FeO in Fe-FeO liquid
@@ -194,11 +198,11 @@ def feo_liquid_chemical_potential(x_fe, p, t):
                                                   feo_liquid_v0, feo_liquid_k0, feo_liquid_kp,
                                                   feo_liquid_a0, feo_liquid_ag0, feo_liquid_k)
 
-
+@numba.jit
 def _delta_mu_fe_liquid(x, p, t, gsolid):
     return fe_liquid_chemical_potential(x, p, t) - gsolid
 
-
+@numba.jit
 def _delta_mu_feo_liquid(x, p, t, gsolid):
     return feo_liquid_chemical_potential(x, p, t) - gsolid
 
@@ -296,7 +300,8 @@ def volume_fraction_solid(x, p, t):
     total_solid_volume = (fe_hpc_vol * phi_fe) + (feo_solid_vol * phi_feo)
     return total_solid_volume/(total_solid_volume+total_liquid_volume)
     
-
+    
+@numba.jit
 def liquid_molar_volume(x, p, t):
     """
     Return the molar volumes of liquid and components
@@ -318,6 +323,7 @@ def liquid_molar_volume(x, p, t):
     return liquid_vol, fe_vol, feo_vol
 
 
+@numba.jit
 def solid_molar_volume(x, p, t):
     """
     Return the molar volumes of solid mixture and components
@@ -339,7 +345,7 @@ def solid_molar_volume(x, p, t):
 
 
 @np.vectorize
-def densities_func(x, p, t):
+def densities(x, p, t):
     """
     Return the density of all the phases and components
     
@@ -357,13 +363,6 @@ def densities_func(x, p, t):
     return liquid_density, solid_mixture_density, fe_liquid_density, fe_hpc_density, \
            feo_liquid_density, feo_solid_density
 
-# Crap hack to avoid a warning (which seems to be spurious)
-# see https://github.com/andreww/slurry/issues/8
-def densities(x, p, t):
-    oldsettings = np.seterr(all='ignore')
-    results = densities_func(x, p, t)
-    np.seterr(**oldsettings)
-    return results
 
 
 

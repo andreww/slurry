@@ -185,7 +185,7 @@ def expand_volume(v, t, v0, a0, ag0, k):
     return v
 
 
-# Cannot jit due to root finder in vinet_eos_volumes
+@numba.jit
 def end_member_free_energy(p, t, a, b, c, d, e, f, v0, k0, kp, a0, ag0, k):
     dp = 0.5
     ps = np.arange(p+dp, step=dp) # in GPa
@@ -205,6 +205,7 @@ def free_energy_onebar(t, a, b, c, d, e, f):
     return g_onebar
 
 
+@numba.jit
 def end_member_delta_g(t, p, liquid_a, liquid_b, liquid_c, liquid_d, liquid_e, liquid_f,
                        liquid_v0, liquid_k0, liquid_kp, liquid_a0, liquid_ag0, liquid_k,
                        solid_a, solid_b, solid_c, solid_d, solid_e, solid_f,
@@ -242,6 +243,7 @@ def end_member_melting_temperature(p, liquid_a, liquid_b, liquid_c, liquid_d, li
 end_member_melting_temperatures = np.vectorize(end_member_melting_temperature)
 
 
+@numba.jit
 def chemical_potential(x, p, t, a, b, c, d, e, f, v0, k0, kp, a0, ag0, k):
     mu_0 = end_member_free_energy(p, t, a, b, c, d, e, f, v0, k0, kp, a0, ag0, k)
     activity = x # ideal solution - could implement non-ideal here 
