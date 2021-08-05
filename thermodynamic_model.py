@@ -9,7 +9,7 @@ import numba
 # rearange EOS in terms of V to avoid?
 # NB: this is easily the biggest cost from profiling! 
 # maybe just build an interpolation and fit this? See issues...
-def vinet_eos_volume(p, v0, k0, kp):
+def numerical_vinet_eos_volume(p, v0, k0, kp):
     """
     Return the volume at some pressure
     
@@ -31,18 +31,107 @@ def vinet_eos_volume(p, v0, k0, kp):
 # function due to brentq...
 # Also crap hack to avoid warning. See
 # https://github.com/andreww/slurry/issues/8
-vinet_eos_volumes_func = np.vectorize(vinet_eos_volume)
-def vinet_eos_volumes(p, v0, k0, kp):
+numerical_vinet_eos_volumes_func = np.vectorize(numerical_vinet_eos_volume)
+def numerical_vinet_eos_volumes(p, v0, k0, kp):
     oldsettings = np.seterr(all='ignore')
-    results = vinet_eos_volumes_func(p, v0, k0, kp)
+    results = numerical_vinet_eos_volumes_func(p, v0, k0, kp)
     np.seterr(**oldsettings)
     return results
 
 @numba.jit
 def _pressure_error(v, v0, k0, kp, p_target):
     return vinet_eos_pressure(v, v0, k0, kp) - p_target
+ 
     
+@numba.vectorize
+def vinet_eos_volumes(p, v0, k0, kp):
+    """
+    Return the volume at some pressure
     
+    Given 1 bar reference volume (v0), bulk modulus (k0),
+    and its pressure derivative (kp) return the volume
+    at pressure p. These should normally all be values
+    at 298 K (thermal expansion is added later). Units 
+    of p and k0 are GPa, v0 and the returned volume
+    are cm^3/mol, and kp is dimensionless. 
+    
+    The solution is the direct inverse of an approximaton
+    to the Vinnet EOS (the exact expression cannot be 
+    inverted) as described in Etter and Dinnebier (2014;
+    J. Applied Crys. 47:384-390 
+    http://dx.doi.org/10.1107/S1600576713032287). This
+    solution (there are four) is valid for k0 > 5 GPa,
+    kp > 1.5 GPa and 0 < P < 100 GPa (at least). We also
+    provide a numerical implementation to check and other
+    solutions are given in the SI to that paper. No checks
+    on the valididty are perfomed. 
+    
+    The major advantage of this approach is that Numba can
+    compile it. This isn't a big deal for one or two calls,
+    but all of the rest of the thermodynamic model is built
+    on this so compiling this allows everything else to be
+    compiled too.
+    """
+    prss = p
+    uuu = 3.0*k0
+    vvv = (3.0/2.0)*(kp - 1.0)
+
+    f = -(1/4)*(-4*uuu*vvv**3-3*uuu*vvv**2)/(uuu*vvv**3)+(1/2)*((1/4)*(-4*uuu*vvv**3-3*uuu*vvv**2)**2 / \
+        (uuu**2* vvv**6)-(9*uuu*vvv**2-6*prss+6*uuu*vvv**3+6*uuu*vvv)/(uuu* vvv**3)+ \
+        (36*uuu**2*vvv**3*prss+21*uuu**2*vvv**4*prss+8*uuu**3*vvv**3-8* prss**3+24*uuu*vvv**3*prss**2 \
+         +24*uuu*vvv*prss**2-6*uuu**2*vvv**2* prss+36*uuu*vvv**2*prss**2+(-(-72*uuu**4*vvv**3-720 \
+        *uuu**3*vvv**3*prss-756*uuu**2*vvv*prss**2-432*uuu**3*vvv**4*prss-3060*uuu**2*vvv**3* prss**2-3024 \
+        *prss**3*uuu*vvv-2664*uuu**2*vvv**4*prss**2-1296*uuu**2* vvv**2*prss**2-7920*uuu*vvv**2*prss**3 \
+        +288*uuu*prss**3-825*uuu**2* vvv**5*prss**2-9576*prss**3*uuu*vvv**3+1152*vvv*prss**4-6000*uuu* vvv**4 \
+        *prss**3+576*vvv**2*prss**4+1152*prss**4-2304*uuu*vvv**5* prss**3+192*prss**4*vvv**3-512*uuu*vvv**6 \
+        *prss**3)/vvv)**(1/2)*uuu* vvv**2)**(1/3)/(uuu*vvv**3)+2*(-(uuu**2*vvv**2)-6*uuu*vvv**2*prss+2* prss**2 \
+        -4*uuu*vvv**3*prss-4*uuu*vvv*prss)/(uuu*vvv**3*(36*uuu**2* vvv**3*prss+21*uuu**2*vvv**4*prss+8*uuu**3 \
+        *vvv**3-8*prss**3+24*uuu* vvv**3*prss**2+24*uuu*vvv*prss**2-6*uuu**2*vvv**2*prss+36*uuu*vvv**2* prss**2 \
+        +(-(-72*uuu**4*vvv**3-720*uuu**3*vvv**3*prss -756*uuu**2*vvv* prss**2-432*uuu**3*vvv**4*prss \
+        -3060*uuu**2*vvv**3*prss**2-3024*prss**3* uuu*vvv-2664*uuu**2*vvv**4*prss**2-1296*uuu**2*vvv**2*prss**2 \
+        -7920*uuu* vvv**2*prss**3+288*uuu*prss**3-825*uuu**2*vvv**5*prss**2-9576*prss**3* uuu*vvv**3+1152*vvv*prss**4 \
+        -6000*uuu*vvv**4*prss**3+576*vvv**2* prss**4+1152*prss**4-2304*uuu*vvv**5*prss**3+192*prss**4*vvv**3 \
+        -512* uuu*vvv**6*prss**3)/vvv)**(1/2)*uuu*vvv**2)**(1/3))-(-3*uuu*vvv**2+2* prss-2*uuu*vvv**3-2*uuu*vvv)/( \
+        uuu*vvv**3))**(1/2)-(1/2)*((1/2)*(-4* uuu*vvv**3-3*uuu*vvv**2)**2/(uuu**2*vvv**6)-(9*uuu*vvv**2-6*prss+6*uuu \
+        * vvv**3+6*uuu*vvv)/(uuu*vvv**3)-(36*uuu**2*vvv**3*prss+21*uuu**2*vvv**4* prss+8*uuu**3*vvv**3-8*prss**3 \
+        +24*uuu*vvv**3*prss**2+24*uuu*vvv* prss**2-6*uuu**2*vvv**2*prss+36*uuu*vvv**2*prss**2+(-(-72*uuu**4* vvv**3 \
+        -720*uuu**3*vvv**3*prss -756*uuu**2*vvv*prss**2-432*uuu**3*vvv**4* prss -3060*uuu**2*vvv**3*prss**2 \
+        -3024*prss**3*uuu*vvv-2664*uuu**2* vvv**4*prss**2-1296*uuu**2*vvv**2*prss**2-7920*uuu*vvv**2*prss**3+288 \
+        * uuu*prss**3-825*uuu**2*vvv**5*prss**2-9576*prss**3*uuu*vvv**3+1152*vvv* prss**4-6000*uuu*vvv**4*prss**3 \
+        +576*vvv**2*prss**4+1152*prss**4-2304* uuu*vvv**5*prss**3+192*prss**4*vvv**3-512*uuu*vvv**6 \
+        * prss**3)/vvv)**(1/2)*uuu*vvv**2)**(1/3)/(uuu*vvv**3)-2*(-(uuu**2* vvv**2)-6*uuu*vvv**2*prss+2*prss**2 \
+        -4*uuu*vvv**3*prss-4*uuu*vvv*prss ) \
+        / (uuu*vvv**3*(36*uuu**2*vvv**3*prss+21*uuu**2*vvv**4*prss+8* uuu**3*vvv**3-8*prss**3+24*uuu*vvv**3 \
+        *prss**2+24*uuu*vvv*prss**2-6* uuu**2*vvv-2*prss+36*uuu*vvv**2*prss**2+(-(-72*uuu**4*vvv**3-720* uuu**3 \
+        *vvv**3*prss -756*uuu**2*vvv*prss**2-432*uuu**3*vvv**4*prss -3060* uuu**2*vvv**3*prss**2-3024*prss**3 \
+        *uuu*vvv-2664*uuu**2*vvv**4* prss**2-1296*uuu**2*vvv**2*prss**2-7920*uuu*vvv**2*prss**3+288*uuu* prss**3 \
+        -825*uuu**2*vvv**5*prss**2-9576*prss**3*uuu*vvv**3+1152*vvv* prss**4-6000*uuu*vvv**4*prss**3 \
+        +576*vvv**2*prss**4+1152*prss**4-2304* uuu*vvv**5*prss**3+192*prss**4*vvv**3-512*uuu*vvv**6 \
+        * prss**3)/vvv)**(1/2)*uuu*vvv**2)**(1/3))+(-3*uuu*vvv**2+2*prss-2*uuu* vvv**3-2*uuu*vvv)/(uuu*vvv**3) \
+        +((9*uuu*vvv**2-6*prss+6*uuu*vvv**3+6* uuu*vvv)*(-4*uuu*vvv**3-3*uuu*vvv**2)/(uuu**2*vvv**6)-2 \
+        *(-4*uuu* vvv**3-9*uuu*vvv**2-12*uuu*vvv-6*uuu)/(uuu*vvv**3)-(1/4)*(-4*uuu* vvv**3-3*uuu*vvv**2)**3/(uuu**3 \
+        *vvv**9)) /((1/4)*(-4*uuu*vvv**3-3*uuu* vvv**2)**2/(uuu**2*vvv**6)-(9*uuu*vvv**2-6*prss+6*uuu*vvv**3 \
+        +6*uuu* vvv)/(uuu*vvv**3)+(36*uuu**2*vvv**3*prss+21*uuu**2*vvv**4*prss+8* uuu**3*vvv**3-8*prss**3 \
+        +24*uuu*vvv**3*prss**2+24*uuu*vvv*prss**2-6* uuu**2*vvv**2*prss+36*uuu*vvv**2*prss**2+(-(-72*uuu**4*vvv**3 \
+        -720* uuu**3*vvv**3*prss -756*uuu**2*vvv*prss**2-432*uuu**3*vvv**4*prss -3060 \
+        * uuu**2*vvv**3*prss**2-3024*prss**3*uuu*vvv-2664*uuu**2*vvv**4* prss**2-1296*uuu**2*vvv**2*prss**2 \
+        -7920*uuu*vvv**2*prss**3+288*uuu* prss**3-825*uuu**2*vvv**5*prss**2-9576*prss**3*uuu*vvv**3+1152*vvv \
+        * prss**4-6000*uuu*vvv**4*prss**3+576*vvv**2*prss**4+1152*prss**4-2304* uuu*vvv**5*prss**3+192*prss**4 \
+        *vvv**3-512*uuu*vvv**6* prss**3)/vvv)**(1/2)*uuu*vvv**2)**(1/3)/(uuu*vvv**3)+2*(-(uuu**2* vvv**2) \
+        -6*uuu*vvv**2*prss+2*prss**2-4*uuu*vvv**3*prss-4*uuu*vvv* \
+        prss ) /(uuu*vvv**3*(36*uuu**2*vvv**3*prss+21*uuu**2*vvv**4 \
+        *prss+8* uuu**3*vvv**3-8*prss**3+24*uuu*vvv**3*prss**2+24*uuu*vvv*prss**2-6* uuu**2*vvv**2*prss \
+        +36*uuu*vvv**2*prss**2+(-(-72*uuu**4*vvv**3-720* uuu**3*vvv**3*prss -756*uuu**2*vvv*prss**2 \
+        -432*uuu**3*vvv**4*prss -3060* uuu**2*vvv**3*prss**2-3024*prss**3*uuu*vvv-2664*uuu**2*vvv**4 \
+        * prss**2-1296*uuu**2*vvv**2*prss**2-7920*uuu*vvv**2*prss**3+288*uuu* prss**3-825*uuu**2*vvv**5 \
+        *prss**2-9576*prss**3*uuu*vvv**3+1152*vvv* prss**4-6000*uuu*vvv**4*prss**3+576*vvv**2*prss**4 \
+        +1152*prss**4-2304* uuu*vvv**5*prss**3+192*prss**4*vvv**3-512*uuu*vvv**6* prss**3)/vvv)**(1/2) \
+        *uuu*vvv**2)**(1/3))-(-3*uuu*vvv**2+2*prss-2*uuu* vvv**3-2*uuu*vvv)/(uuu*vvv**3))**(1/2))**(1/2)
+    
+    v = f**3 * v0
+    return v 
+
+
 @numba.jit
 def vinet_eos_pressure(v, v0, k0, kp):
     """
@@ -96,7 +185,7 @@ def expand_volume(v, t, v0, a0, ag0, k):
     return v
 
 
-# Cannot jit due to root finder in vinet_eos_volumes
+@numba.jit
 def end_member_free_energy(p, t, a, b, c, d, e, f, v0, k0, kp, a0, ag0, k):
     dp = 0.5
     ps = np.arange(p+dp, step=dp) # in GPa
@@ -116,6 +205,7 @@ def free_energy_onebar(t, a, b, c, d, e, f):
     return g_onebar
 
 
+@numba.jit
 def end_member_delta_g(t, p, liquid_a, liquid_b, liquid_c, liquid_d, liquid_e, liquid_f,
                        liquid_v0, liquid_k0, liquid_kp, liquid_a0, liquid_ag0, liquid_k,
                        solid_a, solid_b, solid_c, solid_d, solid_e, solid_f,
@@ -153,6 +243,7 @@ def end_member_melting_temperature(p, liquid_a, liquid_b, liquid_c, liquid_d, li
 end_member_melting_temperatures = np.vectorize(end_member_melting_temperature)
 
 
+@numba.jit
 def chemical_potential(x, p, t, a, b, c, d, e, f, v0, k0, kp, a0, ag0, k):
     mu_0 = end_member_free_energy(p, t, a, b, c, d, e, f, v0, k0, kp, a0, ag0, k)
     activity = x # ideal solution - could implement non-ideal here 
