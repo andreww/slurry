@@ -7,6 +7,8 @@ import numba
 
 # cannot jit due to brentq. Can we
 # rearange EOS in terms of V to avoid?
+# NB: this is easily the biggest cost from profiling! 
+# maybe just build an interpolation and fit this? See issues...
 def vinet_eos_volume(p, v0, k0, kp):
     """
     Return the volume at some pressure
@@ -19,17 +21,22 @@ def vinet_eos_volume(p, v0, k0, kp):
     are cm^3/mol, and kp is dimensionless. The solution
     is via a root finding method.
     """
-    
     p = spo.brentq(_pressure_error, 2.0, 20.0,
-                        args=(v0, k0, kp, p))
+                   args=(v0, k0, kp, p))
 
     return p
     
 
 # Avoid hand coding loops. Cannot numba vectorize 
 # function due to brentq...
-vinet_eos_volumes = np.vectorize(vinet_eos_volume)
-
+# Also crap hack to avoid warning. See
+# https://github.com/andreww/slurry/issues/8
+vinet_eos_volumes_func = np.vectorize(vinet_eos_volume)
+def vinet_eos_volumes(p, v0, k0, kp):
+    oldsettings = np.seterr(all='ignore')
+    results = vinet_eos_volumes_func(p, v0, k0, kp)
+    np.seterr(**oldsettings)
+    return results
 
 @numba.jit
 def _pressure_error(v, v0, k0, kp, p_target):
