@@ -187,8 +187,8 @@ def expand_volume(v, t, v0, a0, ag0, k):
 
 @numba.jit
 def end_member_free_energy(p, t, a, b, c, d, e, f, v0, k0, kp, a0, ag0, k):
-    dp = 0.5
-    ps = np.arange(p+dp, step=dp) # in GPa
+    num = 1200
+    ps = np.linspace(0.0, p, num) # in GPa, 0.25 GPa steps at 300 GPa
     vs = vinet_eos_volumes(ps, v0, k0, kp)
     vs = expand_volume(vs, t, v0, a0, ag0, k) # in cm^3/mol
     # Worry about units here -> GPa and cm^3 converted to Pa and m^3
