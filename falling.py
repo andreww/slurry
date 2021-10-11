@@ -49,9 +49,39 @@ def zhang_particle_dynamics(radius, kinematic_viscosity, gravity,
     of ambient chemical gradients by sinking spheres. Journal of Fluid Mechanics, 892, A33.
     https://doi.org/10.1017/jfm.2020.191
     """
-    # First calculate Re and the falling velocity - pg 139 of Zhang, point "1"
-    # uses _opt_zhang function to do optimisation. Assume solution changes sign
-    # between -1 and 100 m/s
+    # First calculate Re and the falling velocity 
+    falling_velocity, re, drag_coefficient = self_consistent_falling_velocity(radius, 
+                                  kinematic_viscosity, gravity, delta_density, fluid_density)
+    # Dimensionless numbers
+    pr, pe_t, sc, pe_c, fr = dimensionless_numbers(radius, re, falling_velocity, kinematic_viscosity, 
+                          chemical_diffusivity, thermal_diffusivity, brunt_vaisala)    
+    # Boundary layer analysis
+    delta_u, delta_c, delta_t = boundary_layers(radius, re, pe_c, sc, pr)
+    
+    return falling_velocity, drag_coefficient, re, pe_t, pe_c, fr, delta_u, delta_t, delta_c
+
+
+@np.vectorize
+def self_consistent_falling_velocity(radius, kinematic_viscosity, gravity, delta_density, fluid_density):
+    """
+    Emprical falling velocity to Re 3E5 
+    
+    Calculate Re and the falling velocity - pg 139 of Zhang, point "1"
+    uses _opt_zhang function to do optimisation. Assume solution changes sign
+    between -1 and 100 m
+    
+    Input arguments:
+    * radius: particle radius (m)
+    * kinematic_viscosity: viscosity of fluid (m^2/s)
+    * gravity: accelration due to gravity (m/s^2)
+    * delta_density: difference in density between particle and fluid (kg/m^3)
+    * fluid_density: density of fluid (kg/m^3)
+
+    Returns:
+    * falling_velocity: velocity of particle, positive downwards (m/s)
+    * drag_coefficient: empricial drag coefficent based on Reynolds number scaling (-)
+    * re: Reynolds number (-)
+    """
     falling_velocity = scipy.optimize.brentq(_fzhang_opt, -1.0, 100.0,
                             args=(radius, kinematic_viscosity, gravity, delta_density,
                                   fluid_density))
@@ -59,11 +89,91 @@ def zhang_particle_dynamics(radius, kinematic_viscosity, gravity,
     # Recalculate drag and Re from solution velocity
     re, drag_coefficient = _fzhang_re_cd(falling_velocity, radius, kinematic_viscosity)
     
-    # Dimensionless numbers
+    return falling_velocity, re, drag_coefficient
+
+
+def stokes_falling_velocity(radius, kinematic_viscosity, gravity, delta_density, fluid_density):
+    """
+    Falling velocity for low Re
+
+    In the paper we write this in terms of dynamic viscosity.
+    
+    Input arguments:
+    * radius: particle radius (m)
+    * kinematic_viscosity: viscosity of fluid (m^2/s)
+    * gravity: accelration due to gravity (m/s^2)
+    * delta_density: difference in density between particle and fluid (kg/m^3)
+    * fluid_density: density of fluid (kg/m^3)
+
+    Returns:
+    * falling_velocity: velocity of particle, positive downwards (m/s)
+    """
+    stokes_velocity = (2 * delta_density * gravity * radius**2) /  (9 * kinematic_viscosity 
+                                                                    * fluid_density)
+    return stokes_velocity
+
+
+@np.vectorize
+def boundary_layers(radius, re, pe_c, sc, pr):
+    """
+    Dimensional analysis of boundary layer thicknesses for falling particle
+    
+    Input arguments:
+    * radius: particle radius (m)
+    * re: Reynolds number, input as it has to be self consistently calculated (-)
+    * pr: Prandtl number
+    * sc: Schmidt number (-)
+    * pe_c: Chemical Péclet number (-)
+
+    Returns:
+    * delta_u: thickness of mementum boundary layer (m)
+    * delta_t: thickness of thermal boundary layer (m)
+    * delta_c: thickness of chemical boundary layer (m)
+    """
+    if re < 1e-2:
+        delta_u = 2.0 * radius
+        delta_c = 2.0 * radius
+        delta_t = 2.0 * radius
+    elif re < 1e2 and re >= 1e-2:               # Intermediate Re case
+        delta_u = 2.0 * radius
+        delta_t = 2.0 * radius                 # For T, apply low Re limit as Pe is low till Re~100
+        delta_c = 2.0 * pe_c**(-1/3) * 2.0 * radius
+    elif re >= 1e2:                             # High Re case
+        delta_u = re**(-0.5) * 2.0 * radius 
+        delta_c = 4.5 * re**(-0.5) * (sc)**(-1/3) * 2.0 * radius # FIXME: where does the 4.5 come from?
+        delta_t = 3.0 * re**(-0.5) * (pr)**(-0.5) * 2.0 * radius # FIXME: where does the 3 come from?
+    # FIXME - limits on Re.
+    
+    return delta_u, delta_c, delta_t
+
+
+def dimensionless_numbers(radius, re, falling_velocity, kinematic_viscosity, chemical_diffusivity, 
+                          thermal_diffusivity, brunt_vaisala=None):
+    """
+    Calculate dimensionless numbers assoceated with a falling particle
+    
+    Input arguments:
+    * radius: particle radius (m)
+    * re: Reynolds number, input as it has to be self consistently calculated (-)
+    * falling_velocity: velocity of particle, positive downwards (m/s)
+    * kinematic_viscosity: viscosity of fluid (m^2/s)
+    * thermal_diffusivity: thermal diffusivity of fluid (m^2/s)
+    * chemical_diffusivity: chemical diffusivity of fluid (m^2/s)
+    * brunt_vaisala: Brunt–Väisälä frequency. Optional argument. If None (the default)
+          an estimate for the outer core is used. (Hz)
+    
+    Returns:
+    * pr: Prandtl number
+    * pe_t: Thermal Péclet number (-) 
+    * sc: Schmidt number (-)
+    * pe_c: Chemical Péclet number (-)
+    * fr: Froude number (-)
+    """
+
     sc = kinematic_viscosity / chemical_diffusivity
+    pe_c = re * sc
     pr = kinematic_viscosity / thermal_diffusivity
-    pe_t = re * kinematic_viscosity / thermal_diffusivity
-    pe_c = re * kinematic_viscosity / chemical_diffusivity
+    pe_t = re * pr
     
     if brunt_vaisala is None:
         # Default - use PREM estimates... using prem4derg
@@ -74,22 +184,7 @@ def zhang_particle_dynamics(radius, kinematic_viscosity, gravity,
         brunt_vaisala = np.sqrt(-(icb_g / rho_0) * drho_dz)
     fr = falling_velocity / (brunt_vaisala * radius)
     
-    # Boundary layer analysisi
-    if re < 1e-2:
-        delta_u = 2.0 * radius
-        delta_c = 2.0 * radius
-        delta_t = 2.0 * radius
-    elif re < 1e2 and re > 1e-2:               # Intermediate Re case
-        delta_u = 2.0 * radius
-        delta_t = 2.0 * radius                 # For T, apply low Re limit as Pe is low till Re~100
-        delta_c = 2.0 * pe_c**(-1/3) * 2.0 * radius
-    elif re > 1e2:                             # High Re case
-        delta_u = re**(-0.5) * 2.0 * radius 
-        delta_c = 4.5 * re**(-0.5) * (sc)**(-1/3) * 2.0 * radius # FIXME: where does the 4.5 come from?
-        delta_t = 3.0 * re**(-0.5) * (pr)**(-0.5) * 2.0 * radius # FIXME: where does the 3 come from?
-    # FIXME - limits on Re.
-
-    return falling_velocity, drag_coefficient, re, pe_t, pe_c, fr, delta_u, delta_t, delta_c
+    return pr, pe_t, sc, pe_c, fr
 
 
 def _fzhang_re_cd(u, r, mu):
@@ -120,3 +215,63 @@ def _fzhang_opt(u, rad, mu, g, drho, rhol):
     result = result - u
 
     return result
+
+
+def find_critical_radii(kinematic_viscosity, gravity, 
+                        delta_density, fluid_density, thermal_diffusivity,
+                        chemical_diffusivity, brunt_vaisala=None):
+    """
+    Find critical radii for the falling sphere where boundary layer scaling changes
+    
+    This should only be used as a helper for plotting the double optimisation is
+    probably quite expensive
+    
+    Input arguments:
+    * kinematic_viscosity: viscosity of fluid (m^2/s)
+    * gravity: accelration due to gravity (m/s^2)
+    * delta_density: difference in density between particle and fluid (kg/m^3)
+    * fluid_density: density of fluid (kg/m^3)
+    * thermal_diffusivity: thermal diffusivity of fluid (m^2/s)
+    * chemical_diffusivity: chemical diffusivity of fluid (m^2/s)
+    * brunt_vaisala: Brunt–Väisälä frequency. Optional argument. If None (the default)
+          an estimate for the outer core is used. (Hz)
+          
+    Output:
+    * re_low_radius: largest particle radius in the low Re regime (m)
+    * re_int_radius: largest particle radius in the intermediate Re regime (m)
+    * re_cdmax_radius: largest particle radius where drag parameterisation is valid (m)
+    * low_fr_radius: largest particle radius in the low Re regime (m)
+    """
+    critical_re_values = [1.0E-2, 1.0E2, 3.0E5]
+    critical_re_radii = []
+    critical_fr_values = [10.0]
+    critical_fr_radii = []
+    for re in critical_re_values:
+        r_crit = scipy.optimize.brentq(_re_error, 1.0E-8, 1.0E3,
+                            args=(kinematic_viscosity, gravity, delta_density, fluid_density, re))
+        critical_re_radii.append(r_crit)
+    for fr in critical_fr_values:
+        r_crit = scipy.optimize.brentq(_fr_error, 1.0E-8, 1.0E3, args=(kinematic_viscosity, gravity, 
+                    delta_density, fluid_density, chemical_diffusivity, thermal_diffusivity, 
+                                                                       brunt_vaisala, fr))
+        critical_fr_radii.append(r_crit)
+        
+    return critical_re_radii[0], critical_re_radii[1], critical_re_radii[2], critical_fr_radii[0]
+        
+        
+def _re_error(radius, kinematic_viscosity, gravity, delta_density, fluid_density, re_target):
+       
+        _, re, _ = self_consistent_falling_velocity(radius, kinematic_viscosity, gravity, 
+                                                    delta_density, fluid_density)
+        return re - re_target
+    
+
+def _fr_error(radius, kinematic_viscosity, gravity, delta_density, fluid_density, chemical_diffusivity, 
+                          thermal_diffusivity, brunt_vaisala, fr_target):
+       
+        falling_velocity, re, _ = self_consistent_falling_velocity(radius, kinematic_viscosity, gravity, 
+                                                                   delta_density, fluid_density)
+        
+        _, _, _, _, fr = dimensionless_numbers(radius, re, falling_velocity, kinematic_viscosity, 
+                                               chemical_diffusivity, thermal_diffusivity, brunt_vaisala)
+        return fr - fr_target
