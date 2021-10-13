@@ -104,7 +104,7 @@ def _derivatives_of_ode(t, y, xln, temperaturein, pressurein, dl,
     # functions of radius (z) but they will not change during a call (i.e. 
     # during an ODE time step)
     if callable(xln):
-        xl = xln(z)
+        xl = float(xln(z)) # Not sure why this is single element numpy array
     else:
         xl = xln
         
@@ -114,7 +114,7 @@ def _derivatives_of_ode(t, y, xln, temperaturein, pressurein, dl,
         temperature = temperaturein
         
     if callable(pressurein):
-        pressure = pressurein(z)
+        pressure = float(pressurein(z)) # Not sure why this is single element numpy array
     else:
         pressure = pressurein
         
@@ -126,21 +126,20 @@ def _derivatives_of_ode(t, y, xln, temperaturein, pressurein, dl,
     if verbose:
         print('Derivative evaluation at', t, 's, at z=', z, ', rp = ', rp)
         print('At this point T =', temperature, 'K, P =', pressure, 'GPa, xl =', xl, '(mol frac Fe), g =', g, 'm/s^2')
+        print(type(pressure), type(xl))
+        
     
-    # Density calculation (with composition at previous step...)
+    # Density calculation
     rho_liq, _, _, rho_hcp, _, _ = feo_thermodynamics.densities(xl, pressure, temperature)
     delta_rho = rho_hcp - rho_liq
     
     # Falling velocity. Needs self consistent solution as the falling velocity
     # depends on the Reynolds number, which depends on the velocity...
-    v_falling  = -1.0 * spo.brentq(falling.fzhang_opt, -1.0, 100.0, 
-                             args=(rp, mu, g, delta_rho, rho_liq))
-    
-    # Boundary layer width - last two arguments not needed - should clean this function! FIXME!
-    # REALY CLEAN THIS UP!
-    _, _, _, _, delta, _, _ = falling.calculate_boundary_layers([rp], mu, g, delta_rho, rho_liq, 
-                                                    1.0, dl, 1.0, 2.0)
-    delta = delta[0] # Proper vectoriziation of calc boundary layers needed
+    # this also calculates the boundary layer thickness from scaling analysis.
+    # we don't need all output and the thermal diffusivity is irrelevent.
+    v_falling, _, _, _, _, _, _, _, delta = falling.zhang_particle_dynamics(
+        rp, mu, g, delta_rho, rho_liq, 1.0, dl) 
+    v_falling  = -1.0 * v_falling # V = -dr/dt
     
     # Particle growth rate. This needs a self consistent solution as it depends on the composition
     # at the interface, which depends on the growth rate and boundary layer thickness. We optimise for
