@@ -1,3 +1,5 @@
+import warnings
+
 import numpy as np
 import scipy.optimize as spo
 import scipy.interpolate as spi
@@ -8,7 +10,102 @@ import earth_model
 
 # Functions to build and evaluate models fo the F-layer
 # assuming a prescribed total composition and temperature
-# profile. 
+# profile. For most cases the flayer_case function does
+# everything, taking input that people may want to change
+# and returning most useful output. However, for some cases
+# a combination of setup_flayer_functions, evaluate_flayer
+# and analyse_flayer may be more useful (e.g. for making 
+# more involved plots, or showing how things work. flayer_case 
+# is really just a thin wrapper around these three functions
+# but it is set up so we can process cases in parallel with
+# multiprocessing (see process_cases.py).
+
+def flayer_case(f_layer_thickness, delta_t_icb, xfe_outer_core, xfe_icb,
+                initial_particle_size, growth_prefactor, chemical_diffusivity,
+                kinematic_viscosity, number_of_nucleation_points, 
+                number_of_analysis_points,
+                r_icb=1221.5E3, r_cmb=3480.0E3, gruneisen_parameter=1.5,
+                start_time=0.0, max_time=1.0E12, max_rel_error=0.01,
+                max_absolute_error=0.001, inner_core_offset=1000.0):
+    """
+    Setup, run and analyse a non-equilibrium F-layer model
+    
+    We define the F-layer as a region above the ICB with a temperature
+    that varies linearly with radius and is pinned to the adiabat and
+    Fe-FeO liquidus at the top of the F-layer and is colder (or hotter) 
+    than the adiabat at the ICB. The F-layer thickness is chosen along
+    with the oxygen content of the outer core and a Grüneisen parameter 
+    and the temperature of the CMB varied until the temperature at top
+    of the F-layer corresponds to the liquidus. Pressure (and gravity)
+    is taken from PREM. Inside the F-layer the total oxygen content is 
+    permitted to vary linearly between the bulk core value and a value
+    at the ICB (these are commonly chosen to be equal). As defined the
+    F-layer is in the Fe-FeO two phase region so we allow iron to nucleate,
+    sink and grow within it and evaluate the solid content.
+    
+    Input arguments:
+    * f_layer_thickness: thickness of F-layer (m)
+    * delta_t_icb: difference between adiabat and F-layer
+      temperature at ICB, more positive is colder (K)
+    * xfe_outer_core: composition at top of F-layer (mol frac Fe)
+    * xfe_icb: composition at bottom of F-layer (mol frac Fe)
+    * initial_particle_size: particle size at nucleation (m)
+    * growth_prefactor: prefactor for particle growth rate (m/s)
+    * chemical_diffusivity: diffusivity of oxygen in liquid iron (UNITS?)
+    * kinematic_viscosity: kinematic viscosity of liquid iron(UNITS)
+    * number_of_nucleation_points: how many points to allow particle nucleation (-)
+    * number_of_analysis_ponts: how many points to perform liquid composition
+      and other analysis (-)
+    
+    Optional input arguments:
+    * r_icb: inner core boundary radius, default is 1221.5e3 (m)
+    * r_cmb: core mantle boundary radius, default is 3480.0e3 (m)
+    * gruneisen_parameter: Grüneisen parameter for outer core adiabat 
+      calculation, default is 1.5 (-)
+    * start_time: initial time condition for IVP solver, default 0.0 (s)
+    * max_time: maximum time for the IVP solver, default 1.0E12 (s)
+    * max_rel_error: maximum relative error on liquid composition in
+      self consistent solution, default 0.01 (-)
+    * max_absolute_error: maximum absolute error on liquid composition in
+      self consistent solution, default 0.001 (mol frac Fe)
+    * inner_core_offset: start discretisation of F-layer this far above
+      ICB, default is 1000.0 (m)
+      
+      
+    Output arguments:
+    * t_flayer_top: temperature at top of the F-layer
+    * t_flayer_bottom: temperature at ICB
+    * t_cmb: temperature of core mantle boundary
+    """
+    # Derived values of use
+    r_flayer_top = r_icb + f_layer_thickness
+    
+    # Make nterpolation functions for each input property (matching liquidus and
+    # adiabat
+    tfunc, tafunc, xfunc, pfunc, gfunc = setup_flayer_functions(r_icb, r_cmb,
+         r_flayer_top, gruneisen_parameter, delta_t_icb, xfe_outer_core, xfe_icb)
+    
+    # Discretisation points
+    
+    grid_offset = 250.0 # FIXME!
+    nucleation_radii = np.linspace(r_icb+inner_core_offset, 
+                                   r_flayer_top, number_of_nucleation_points)
+    analysis_radii = np.linspace(r_icb+inner_core_offset-grid_offset, 
+                                 r_flayer_top-grid_offset, number_of_analysis_points)
+    
+    # FIXME!
+    nucleation_rates = np.ones_like(nucleation_radii)*1.0E-14 # should it be a function even if it always constant?
+    
+    # doit!
+    solutions, particle_densities, calculated_interaction_radii, growth_rate, solid_vf, \
+        particle_radius_unnormalised, particle_radius_histogram = solve_flayer(tfunc, xfunc, 
+        pfunc, gfunc, start_time, max_time, initial_particle_size, growth_prefactor, 
+        chemical_diffusivity, kinematic_viscosity, nucleation_radii, 
+        nucleation_rates, analysis_radii, r_icb, 
+        r_flayer_top, max_rel_error=max_rel_error, max_absolute_error=max_absolute_error)
+    
+    return analysis_radii, particle_densities, calculated_interaction_radii, growth_rate, solid_vf, \
+        particle_radius_unnormalised, particle_radius_histogram
 
 def setup_flayer_functions(r_icb, r_cmb, r_flayer_top, gamma, delta_t_icb, xfe_adiabatic, xfe_icb):
     """
@@ -133,7 +230,8 @@ def report_all_solution_events(sol, analysis_depths):
         print('particle dissolved at t = ', sol.t_events[1][0], 's')
     for i, r in enumerate(analysis_depths):
         if sol.t_events[i+2].size > 0:
-            assert sol.t_events[i+2].size == 1, "Double crossing detected"
+            if sol.t_events[i+2].size != 1:
+                warnings.warn( "Double crossing detected")
             print("reached r = ", r, 'm at t = ', sol.t_events[i+2][0], 's, with particle radius = ', sol.y_events[i+2][0][0])
         else:
             print('did not reach r = ', r, 'm')
