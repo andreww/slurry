@@ -98,14 +98,16 @@ def flayer_case(f_layer_thickness, delta_t_icb, xfe_outer_core, xfe_icb,
     
     # doit!
     solutions, particle_densities, calculated_interaction_radii, growth_rate, solid_vf, \
-        particle_radius_unnormalised, particle_radius_histogram = solve_flayer(tfunc, xfunc, 
+        particle_radius_unnormalised, particle_radius_histogram = evaluate_flayer(tfunc, xfunc, 
         pfunc, gfunc, start_time, max_time, initial_particle_size, growth_prefactor, 
         chemical_diffusivity, kinematic_viscosity, nucleation_radii, 
         nucleation_rates, analysis_radii, r_icb, 
-        r_flayer_top, max_rel_error=max_rel_error, max_absolute_error=max_absolute_error)
+        r_flayer_top, max_rel_error=max_rel_error, max_absolute_error=max_absolute_error,
+                                                                                 verbose=False)
     
     return analysis_radii, particle_densities, calculated_interaction_radii, growth_rate, solid_vf, \
         particle_radius_unnormalised, particle_radius_histogram
+
 
 def setup_flayer_functions(r_icb, r_cmb, r_flayer_top, gamma, delta_t_icb, xfe_adiabatic, xfe_icb):
     """
@@ -210,6 +212,118 @@ def setup_flayer_functions(r_icb, r_cmb, r_flayer_top, gamma, delta_t_icb, xfe_a
         pressure_function, gravity_function
 
 
+def evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time, initial_particle_size,
+                    k0, dl, mu, nucleation_radii, nucleation_rates, analysis_radii, radius_inner_core, 
+                    radius_top_flayer, max_rel_error=0.01, max_absolute_error=0.001, verbose=True):
+    """
+    Create a self consistent solution for the F-layer assuming non-equilibrium growth and falling
+    of iron crystals
+    
+    This involves integration of the results from falling-growing crystal calculations with the
+    integration being with respect to the nucleation radius. We thus need to perform the calculations
+    at a set of (provided) nucleation radii for the integration. Each of thse is assoceated with 
+    a nucleation rate. We calculate the density of falling particles (and thus their seperation)
+    at a number of analysis radii. We then calculate the total solid volume at a given radius and thus 
+    the oxygen content of the liquid. This is updated and a self-conssitent solution found
+    
+    Input arguments:
+    
+    tfunc: function returing temperature in K as a function of radius in m (callable), or scalar (K)
+    xfunc: function returing total composition in mol. frac Fe as a function of radius in m 
+           (callable), or scalar (in mol. frac Fe)
+    pfunc: function returing pressure in GPa as a function of radius in m (callable), or scalar (GPa)
+    gfunc: function returning acceleration due to gravity in m/s as a function of radius in m (callable)
+           or scalar (m/s)
+    start_time: initial time condition for IVP solver (s)
+    max_time: maximum time for the IVP solver (s)
+    initial_particle_size: initial radius of new particles (m)
+    k0: prefactor for particle growth rate (m/s)
+    dl: diffusivity of oxygen in liquid iron (UNITS?)
+    mu: kinematic viscosity of liquid iron(UNITS)
+    nucleation_radii: The radii where we explicity consider nuclation to take place. These are used
+        as integration points for a numerical integration over the whole nucleating layer so we need
+        enough of thse to converge. However, as the solution seems to be well behaved O(10) seems to
+        be enough. A 1D array of radii (measured outwards from the center of the Earth) in m.
+    nucleation_rates: The nucleation rate (in events per m^3 per s) at each nucleation_radii. 1D array
+    analysis_radii: locations where the particle density and other output parameters are calculated.
+        1D array in m. No particular relationship with nucleation radii assumes. This is also the place
+        where the self conssitency of the solution is checked.
+    radius_inner_core: inner core boundary radius (m)
+    radius_top_flayer: radius to top of F-layer (m)
+    max_rel_error: maximum relative error on any particle radius at any analysis position to be considered converged. 
+        Defaults to 1%
+    max_rel_error: maximum absolute error on any particle radius at any analysis position to be considered converged. 
+        Defaults to 1 mm.
+        
+    Returns:
+    solutions: list of IVP solution objects, one per nucleation_radii
+    particle_densities: array of total particle number densities (particles per m^3) evaluated at the
+        analysis_radii
+    calculated_interaction_radii: mean seperation between particles, evaluated at the analysis_radii (in m)
+    icb_growth_rate: calculated growth rate of the inner core (in m/s)
+    solid_vf: volume fraction solid evaluated at each analysis_radii
+    particle_radius_unnormalised: 2D numpy array of size (analysis_radii, nucleation_radii) giving 
+        giving the crystal radius measured at an analysis radius which nucleated at a nucleation radius.
+    particle_radius_histogram: 2D numpy array of size (analysis_radii, nucleation_radii) giving the
+        product of the particle radius and corresponding density at each analysis radius for each nucleation
+        radius.
+    """
+    
+    # Set initial liquid compositioon # TODO: pass xfunc in as argument 
+    xl_func = spi.interp1d(analysis_radii, xfunc(analysis_radii), fill_value='extrapolate')
+    
+    # Calculate an initial guess using the provided liquid compositioon (TODO: pass in xl)
+    solutions, particle_densities, calculated_interaction_radii, growth_rate, solid_vf, \
+        particle_radius_unnormalised, particle_radius_histogram = integrate_snow_zone(
+        analysis_radii, radius_inner_core, radius_top_flayer, nucleation_radii, 
+        nucleation_rates, tfunc, xl_func, pfunc, gfunc,
+        start_time, max_time, initial_particle_size, k0, dl, mu, verbose=verbose)
+    
+    # Work out the updated liquid composition to maintain mass
+    xl_points = np.zeros_like(analysis_radii)
+    for i, analysis_r in enumerate(analysis_radii):
+        _, mol_vol_solid, _ = feot.solid_molar_volume(1.0, pfunc(analysis_r), tfunc(analysis_r))
+        mol_vol_liquid, _, _ = feot.liquid_molar_volume(xl_func(analysis_r), pfunc(analysis_r), tfunc(analysis_r))
+        moles_solid = (solid_vf[i] * 100.0**3) / mol_vol_solid
+        moles_liquid = ((1.0 - solid_vf[i]) * 100.0**3) / mol_vol_liquid
+        mol_frac_solid = moles_solid / (moles_solid + moles_liquid)
+        xl_points[i] = xfunc(analysis_r) / (1.0 - mol_frac_solid)
+    xl_func = spi.interp1d(analysis_radii, xl_points, fill_value='extrapolate')
+    
+    converged = False
+    while not converged:
+        # Recalculate solution with updated (TODO: xl...)
+        solutions, particle_densities, calculated_interaction_radii, growth_rate, solid_vf, \
+             new_particle_radius_unnormalised, particle_radius_histogram = integrate_snow_zone(
+             analysis_radii, radius_inner_core, radius_top_flayer, 
+             nucleation_radii, nucleation_rates, tfunc, xl_func, pfunc, gfunc,
+             start_time, max_time, initial_particle_size, k0, dl, mu,)
+        converged = np.allclose(particle_radius_unnormalised, new_particle_radius_unnormalised,
+                                atol=max_absolute_error, rtol=max_rel_error, verbose=verbose)
+        particle_radius_unnormalised = new_particle_radius_unnormalised
+        
+        # Work out the updated liquid composition to maintain mass  
+        xl_points = np.zeros_like(analysis_radii)
+        for i, analysis_r in enumerate(analysis_radii):
+            _, mol_vol_solid, _ = feot.solid_molar_volume(1.0, pfunc(analysis_r), tfunc(analysis_r))
+            mol_vol_liquid, _, _ = feot.liquid_molar_volume(xl_func(analysis_r), pfunc(analysis_r), tfunc(analysis_r))
+            moles_solid = (solid_vf[i] * 100.0**3) / mol_vol_solid
+            moles_liquid = ((1.0 - solid_vf[i]) * 100.0**3) / mol_vol_liquid
+            mol_frac_solid = moles_solid / (moles_solid + moles_liquid)
+            xl_points[i] = xfunc(analysis_r) / (1.0 - mol_frac_solid)
+        xl_func = spi.interp1d(analysis_radii, xl_points, fill_value='extrapolate')
+        
+    return solutions, particle_densities, calculated_interaction_radii, growth_rate, solid_vf, \
+        particle_radius_unnormalised, particle_radius_histogram 
+
+
+def analyse_flayer(solutions, integration_radii, nucleation_rates, radius_inner_core, verbose=True):
+
+
+    # core growth rate in km/Myr
+    growth_rate = evaluate_core_growth_rate(solutions, integration_radii, nucleation_rates, 
+                                            radius_inner_core, verbose=verbose)
+    
 def report_all_solution_events(sol, analysis_depths):
     """
     Print out what happend to a single ODE IVP falling calculation
@@ -307,27 +421,9 @@ def partial_particle_density(ivp_solution, event_index, nucleation_rate, nucleat
     return partial_density
 
 
-# Actually run the IVPs
-def run_ivps_for_snow_zone(analysis_depths, integration_depths, radius_inner_core, nucleation_rates, 
-                           tfunc, xl_func, pfunc, gfunc,
-                           k0, dl, mu, start_time, max_time, initial_particle_size):
-    # FIXME: other parameters should be arguments
-    solutions = []
-    for int_depth in integration_depths:
-        print("Starting ODE IVP solver for nuclation at", int_depth)
-        sol = particle_evolution.falling_growing_particle_solution(start_time, max_time, initial_particle_size, 
-                                                       int_depth, xl_func, tfunc, pfunc,
-                                                       dl, k0, gfunc, mu, radius_inner_core, analysis_depths)
-        assert sol.success, "No ODE solution found!"
-        report_all_solution_events(sol, analysis_depths)
-        solutions.append(sol)
-        
-    return solutions
-
-
 # Total particle density and solid volume fraction calculation
 def evaluate_partcle_densities(solutions, analysis_depths, integration_depths, nucleation_rates, 
-                               radius_inner_core, radius_top_flayer):
+                               radius_inner_core, radius_top_flayer, verbose=True):
     # FIXME: other parameters should be arguments
 
     print("ODE solved for all nuclation depths... calculating integrals over nuclation depth for particle density")
@@ -367,10 +463,11 @@ def evaluate_partcle_densities(solutions, analysis_depths, integration_depths, n
                                   - (integration_depths[j-1] + 0.5 * (
                                       integration_depths[j] - integration_depths[j-1])
                                     ))
-            print("\nPartial density calc for i = ", i, "and j = ", j, "nuc_rate = ", nuc_rate, "nuc_vol = ", nuc_vol)
-            print("Analysis r = ", analysis_r, "int r = ", int_r)
+            if verbose:
+                print("\nPartial density calc for i = ", i, "and j = ", j, "nuc_rate = ", nuc_rate, "nuc_vol = ", nuc_vol)
+                print("Analysis r = ", analysis_r, "int r = ", int_r)
             partial_densities[j] = partial_particle_density(solutions[j], analysis_index, 
-                                                            nuc_rate, nuc_vol, verbose=True)
+                                                            nuc_rate, nuc_vol, verbose=verbose)
             
             # Put radius at this radius and nuc radius in radius histogram
             if solutions[j].t_events[analysis_index].size > 0:
@@ -386,14 +483,16 @@ def evaluate_partcle_densities(solutions, analysis_depths, integration_depths, n
             
         # Number density of particles at this radius
         particle_density = np.trapz(partial_densities, integration_depths) / nuc_area # See units note...
-        print("\nTotal particle density at r = ", analysis_r, "is", particle_density, "particles per m^3")
+        if verbose:
+            print("\nTotal particle density at r = ", analysis_r, "is", particle_density, "particles per m^3")
         particle_densities[i] = particle_density
         
         # Solid volume fraction of particles at this radius - this is partial number density multiplied
         # by particle volume integrated over nucleation height. While we are here also build a grain size
         # distribution histogramme at each radius
         solid_vf[i] = np.trapz(4/3*np.pi*partial_radius**3 * (partial_densities / nuc_area), integration_depths)
-        print("Solid volume fraction at r = ", analysis_r, " is ", solid_vf[i])
+        if verbose:
+            print("Solid volume fraction at r = ", analysis_r, " is ", solid_vf[i])
         
     # Evaluate seperation of particles (to allow self consistent solution)
     calculated_seperation = np.zeros_like(analysis_depths)
@@ -405,14 +504,14 @@ def evaluate_partcle_densities(solutions, analysis_depths, integration_depths, n
             # Assign nominal seperation based on min density
             sep = np.inf
         calculated_seperation[i] = sep
-        print("Ar r =", rad, "m, particle density = ", rho, 'per m^3, calculated seperation radius = ', sep, 'm')
+        if verbose:
+            print("Ar r =", rad, "m, particle density = ", rho, 'per m^3, calculated seperation radius = ', sep, 'm')
        
     return particle_densities, calculated_seperation, solid_vf, particle_radius_unnormalised, particle_radius_histogram
 
 
 # Just calculate the core growth rate.
-def evaluate_core_growth_rate(solutions, integration_depths, nucleation_rates, radius_inner_core):
-    # FIXME: other parameters should be arguments
+def evaluate_core_growth_rate(solutions, integration_depths, nucleation_rates, radius_inner_core, verbose=True):
     print("\nODE solved for all nuclation depths... calculating integrals over nuclation depth for inner core growth")
     
     # IC growth rate should be okay
@@ -436,9 +535,12 @@ def evaluate_core_growth_rate(solutions, integration_depths, nucleation_rates, r
     growth_rate = np.trapz(particle_volumes * nucleation_rates * integration_depths**2 * 4.0 * np.pi, 
                            integration_depths) / area_icb
     
+    if verbose:
+        print("Inner core growth rate:", growth_rate, "m/s")
     secinMyr = 60.0*60.0*24.0*365.0*1000000.0
-    print("Inner core growth rate:", growth_rate, "m/s")
-    print("Inner core growth rate:", growth_rate/1000.0 * secinMyr, "km/Myr (or mm/yr)")
+    growth_rate = growth_rate/1000.0 * secinMyr
+    if verbose:
+        print("Inner core growth rate:", growth_rate/1000.0 * secinMyr, "km/Myr (or mm/yr)")
     return growth_rate
     
     
@@ -446,114 +548,30 @@ def evaluate_core_growth_rate(solutions, integration_depths, nucleation_rates, r
 # Fitst create a interpolator for the ineteraction radius.
 def integrate_snow_zone(analysis_depths, radius_inner_core, radius_top_flayer, integration_depths, 
                         nucleation_rates, tfunc, xl_func, pfunc, gfunc,
-                        start_time, max_time, initial_particle_size, k0, dl, mu,):
-    # FIXME: other parameters should be arguments
+                        start_time, max_time, initial_particle_size, k0, dl, mu, verbose=True):
+    """
+    For a single liquid composition, run the IVPs and do the minimum analysis needed
     
-    solutions = run_ivps_for_snow_zone(analysis_depths, integration_depths, radius_inner_core, 
-                                       nucleation_rates, tfunc, xl_func, pfunc, gfunc,
-                                       k0, dl, mu, start_time, max_time, initial_particle_size)
+    This should be called by the self-consistent solver
+    """
+    solutions = []
+    for int_depth in integration_depths:
+        if verbose:
+            print("Starting ODE IVP solver for nuclation at", int_depth)
+        sol = particle_evolution.falling_growing_particle_solution(start_time, max_time, initial_particle_size, 
+                                                       int_depth, xl_func, tfunc, pfunc,
+                                                       dl, k0, gfunc, mu, radius_inner_core, analysis_depths)
+        assert sol.success, "No ODE solution found!"
+        report_all_solution_events(sol, analysis_depths)
+        solutions.append(sol)
     
     particle_densities, calculated_seperation, solid_vf, \
         particle_radius_unnormalised, particle_radius_histogram = evaluate_partcle_densities(solutions, 
                                         analysis_depths, integration_depths, nucleation_rates, radius_inner_core, 
-                                                                                             radius_top_flayer)
+                                                                                             radius_top_flayer, verbose=verbose)
     
     growth_rate = evaluate_core_growth_rate(solutions, integration_depths, nucleation_rates, radius_inner_core)
     
     return solutions, particle_densities, calculated_seperation, growth_rate, solid_vf, particle_radius_unnormalised, particle_radius_histogram
     
     
-# This controls the self consistnet solution
-def solve_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time, initial_particle_size,
-                 k0, dl, mu, nucleation_radii, nucleation_rates, analysis_radii, radius_inner_core, 
-                 radius_top_flayer, max_rel_error=0.01, max_absolute_error=0.001):
-    """
-    FIX THE DOCSTRING!
-    Create a self consistent solution for the F-layer assuming non-equilibrium growth and falling
-    of iron crystals
-    
-    This involves integration of the results from falling-growing crystal calculations with the
-    integration being with respect to the nucleation radius. We thus need to perform the calculations
-    at a set of (provided) nucleation radii for the integration. Each of thse is assoceated with 
-    a nucleation rate. We calculate the density of falling particles (and thus their seperation)
-    at a number of analysis radii. Part of the calculation needs us to know an interaction region
-    around each particle. This is found self consistently, but an initial guess can be provided.
-    
-    Input arguments:
-    
-    nucleation_radii: The radii where we explicity consider nuclation to take place. These are used
-        as integration points for a numerical integration over the whole nucleating layer so we need
-        enough of thse to converge. However, as the solution seems to be well behaved O(10) seems to
-        be enough. A 1D array of radii (measured outwards from the center of the Earth) in m.
-    nucleation_rates: The nucleation rate (in events per m^3 per s) at each nucleation_radii. 1D array
-    analysis_radii: locations where the particle density and other output parameters are calculated.
-        1D array in m. No particular relationship with nucleation radii assumes. This is also the place
-        where the self conssitency of the solution is checked.
-    initial_interaction_radii: an initial guess at the interaction radius at each analysis_radii. Interpolatied
-        for all other radii (using linear interpolator). Defaults to 1m.
-    maximum_seperation: how big can we let the seperation get. Defaults to 3m.
-    max_rel_error: maximum relative error on any particle radius at any analysis position to be considered converged. 
-        Defaults to 1%
-    max_rel_error: maximum absolute error on any particle radius at any analysis position to be considered converged. 
-        Defaults to 1 mm.
-        
-    Returns:
-    solutions: list of IVP solution objects, one per nucleation_radii
-    particle_densities: array of total particle number densities (particles per m^3) evaluated at the
-        analysis_radii
-    calculated_interaction_radii: mean seperation between particles, evaluated at the analysis_radii (in m)
-    icb_growth_rate: calculated growth rate of the inner core (in m/s)
-    solid_vf: volume fraction solid evaluated at each analysis_radii
-    particle_radius_unnormalised: 2D numpy array of size (analysis_radii, nucleation_radii) giving 
-        giving the crystal radius measured at an analysis radius which nucleated at a nucleation radius.
-    particle_radius_histogram: 2D numpy array of size (analysis_radii, nucleation_radii) giving the
-        product of the particle radius and corresponding density at each analysis radius for each nucleation
-        radius.
-    """
-    
-    # Set initial liquid compositioon # TODO: pass xfunc in as argument 
-    xl_func = spi.interp1d(analysis_radii, xfunc(analysis_radii), fill_value='extrapolate')
-    
-    # Calculate an initial guess using the provided liquid compositioon (TODO: pass in xl)
-    solutions, particle_densities, calculated_interaction_radii, growth_rate, solid_vf, \
-        particle_radius_unnormalised, particle_radius_histogram = integrate_snow_zone(
-        analysis_radii, radius_inner_core, radius_top_flayer, nucleation_radii, 
-        nucleation_rates, tfunc, xl_func, pfunc, gfunc,
-        start_time, max_time, initial_particle_size, k0, dl, mu)
-    
-    # Work out the updated liquid composition to maintain mass
-    xl_points = np.zeros_like(analysis_radii)
-    for i, analysis_r in enumerate(analysis_radii):
-        _, mol_vol_solid, _ = feot.solid_molar_volume(1.0, pfunc(analysis_r), tfunc(analysis_r))
-        mol_vol_liquid, _, _ = feot.liquid_molar_volume(xl_func(analysis_r), pfunc(analysis_r), tfunc(analysis_r))
-        moles_solid = (solid_vf[i] * 100.0**3) / mol_vol_solid
-        moles_liquid = ((1.0 - solid_vf[i]) * 100.0**3) / mol_vol_liquid
-        mol_frac_solid = moles_solid / (moles_solid + moles_liquid)
-        xl_points[i] = xfunc(analysis_r) / (1.0 - mol_frac_solid)
-    xl_func = spi.interp1d(analysis_radii, xl_points, fill_value='extrapolate')
-    
-    converged = False
-    while not converged:
-        # Recalculate solution with updated (TODO: xl...)
-        solutions, particle_densities, calculated_interaction_radii, growth_rate, solid_vf, \
-             new_particle_radius_unnormalised, particle_radius_histogram = integrate_snow_zone(
-             analysis_radii, radius_inner_core, radius_top_flayer, 
-             nucleation_radii, nucleation_rates, tfunc, xl_func, pfunc, gfunc,
-             start_time, max_time, initial_particle_size, k0, dl, mu,)
-        converged = np.allclose(particle_radius_unnormalised, new_particle_radius_unnormalised,
-                                atol=max_absolute_error, rtol=max_rel_error)
-        particle_radius_unnormalised = new_particle_radius_unnormalised
-        
-        # Work out the updated liquid composition to maintain mass  
-        xl_points = np.zeros_like(analysis_radii)
-        for i, analysis_r in enumerate(analysis_radii):
-            _, mol_vol_solid, _ = feot.solid_molar_volume(1.0, pfunc(analysis_r), tfunc(analysis_r))
-            mol_vol_liquid, _, _ = feot.liquid_molar_volume(xl_func(analysis_r), pfunc(analysis_r), tfunc(analysis_r))
-            moles_solid = (solid_vf[i] * 100.0**3) / mol_vol_solid
-            moles_liquid = ((1.0 - solid_vf[i]) * 100.0**3) / mol_vol_liquid
-            mol_frac_solid = moles_solid / (moles_solid + moles_liquid)
-            xl_points[i] = xfunc(analysis_r) / (1.0 - mol_frac_solid)
-        xl_func = spi.interp1d(analysis_radii, xl_points, fill_value='extrapolate')
-        
-    return solutions, particle_densities, calculated_interaction_radii, growth_rate, solid_vf, \
-        particle_radius_unnormalised, particle_radius_histogram 
