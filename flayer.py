@@ -97,7 +97,7 @@ def flayer_case(f_layer_thickness, delta_t_icb, xfe_outer_core, xfe_icb,
     nucleation_rates = np.ones_like(nucleation_radii)*1.0E-14 # should it be a function even if it always constant?
     
     # doit!
-    solutions, particle_densities, calculated_interaction_radii, growth_rate, solid_vf, \
+    solutions, particle_densities, growth_rate, solid_vf, \
         particle_radius_unnormalised, particle_radius_histogram = evaluate_flayer(tfunc, xfunc, 
         pfunc, gfunc, start_time, max_time, initial_particle_size, growth_prefactor, 
         chemical_diffusivity, kinematic_viscosity, nucleation_radii, 
@@ -105,8 +105,13 @@ def flayer_case(f_layer_thickness, delta_t_icb, xfe_outer_core, xfe_icb,
         r_flayer_top, max_rel_error=max_rel_error, max_absolute_error=max_absolute_error,
                                                                                  verbose=False)
     
-    return analysis_radii, particle_densities, calculated_interaction_radii, growth_rate, solid_vf, \
-        particle_radius_unnormalised, particle_radius_histogram
+    # Post-solution analysis
+    calculated_seperation, growth_rate = analyse_flayer(solutions, nucleation_radii, analysis_radii, nucleation_rates, r_icb,
+                   particle_densities, growth_rate, solid_vf, \
+                   particle_radius_unnormalised, particle_radius_histogram, verbose=True)
+    
+    return analysis_radii, particle_densities, calculated_seperation, solid_vf, \
+        particle_radius_unnormalised, particle_radius_histogram, growth_rate
 
 
 def setup_flayer_functions(r_icb, r_cmb, r_flayer_top, gamma, delta_t_icb, xfe_adiabatic, xfe_icb):
@@ -273,13 +278,14 @@ def evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time, initial_pa
     xl_func = spi.interp1d(analysis_radii, xfunc(analysis_radii), fill_value='extrapolate')
     
     # Calculate an initial guess using the provided liquid compositioon (TODO: pass in xl)
-    solutions, particle_densities, calculated_interaction_radii, growth_rate, solid_vf, \
+    solutions, particle_densities, growth_rate, solid_vf, \
         particle_radius_unnormalised, particle_radius_histogram = integrate_snow_zone(
         analysis_radii, radius_inner_core, radius_top_flayer, nucleation_radii, 
         nucleation_rates, tfunc, xl_func, pfunc, gfunc,
         start_time, max_time, initial_particle_size, k0, dl, mu, verbose=verbose)
     
     # Work out the updated liquid composition to maintain mass
+    # FIXME: to function
     xl_points = np.zeros_like(analysis_radii)
     for i, analysis_r in enumerate(analysis_radii):
         _, mol_vol_solid, _ = feot.solid_molar_volume(1.0, pfunc(analysis_r), tfunc(analysis_r))
@@ -293,16 +299,19 @@ def evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time, initial_pa
     converged = False
     while not converged:
         # Recalculate solution with updated (TODO: xl...)
-        solutions, particle_densities, calculated_interaction_radii, growth_rate, solid_vf, \
+        solutions, particle_densities, growth_rate, solid_vf, \
              new_particle_radius_unnormalised, particle_radius_histogram = integrate_snow_zone(
              analysis_radii, radius_inner_core, radius_top_flayer, 
              nucleation_radii, nucleation_rates, tfunc, xl_func, pfunc, gfunc,
-             start_time, max_time, initial_particle_size, k0, dl, mu,)
+             start_time, max_time, initial_particle_size, k0, dl, mu, verbose=verbose)
+        
         converged = np.allclose(particle_radius_unnormalised, new_particle_radius_unnormalised,
-                                atol=max_absolute_error, rtol=max_rel_error, verbose=verbose)
+                                atol=max_absolute_error, rtol=max_rel_error)
+        
         particle_radius_unnormalised = new_particle_radius_unnormalised
         
         # Work out the updated liquid composition to maintain mass  
+        # FIXME: to function
         xl_points = np.zeros_like(analysis_radii)
         for i, analysis_r in enumerate(analysis_radii):
             _, mol_vol_solid, _ = feot.solid_molar_volume(1.0, pfunc(analysis_r), tfunc(analysis_r))
@@ -313,16 +322,29 @@ def evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time, initial_pa
             xl_points[i] = xfunc(analysis_r) / (1.0 - mol_frac_solid)
         xl_func = spi.interp1d(analysis_radii, xl_points, fill_value='extrapolate')
         
-    return solutions, particle_densities, calculated_interaction_radii, growth_rate, solid_vf, \
+    return solutions, particle_densities, growth_rate, solid_vf, \
         particle_radius_unnormalised, particle_radius_histogram 
 
 
-def analyse_flayer(solutions, integration_radii, nucleation_rates, radius_inner_core, verbose=True):
+def analyse_flayer(solutions, integration_radii, analysis_radii, nucleation_rates, radius_inner_core,
+                   particle_densities, growth_rate, solid_vf, \
+                   particle_radius_unnormalised, particle_radius_histogram, verbose=True):
+    """
+    Perform post-processing analysis of solution
+    
+    Note that we do quite a lot of analysis in the solver to reach a self consistent solution
+    and the results of this analysis must be passed into this function
+    """
 
+    # Seperation betwen particles
+    calculated_seperation = evaluate_particle_seperation(particle_densities, analysis_radii, verbose=verbose)
 
     # core growth rate in km/Myr
     growth_rate = evaluate_core_growth_rate(solutions, integration_radii, nucleation_rates, 
                                             radius_inner_core, verbose=verbose)
+    
+    return calculated_seperation, growth_rate
+    
     
 def report_all_solution_events(sol, analysis_depths):
     """
@@ -425,8 +447,8 @@ def partial_particle_density(ivp_solution, event_index, nucleation_rate, nucleat
 def evaluate_partcle_densities(solutions, analysis_depths, integration_depths, nucleation_rates, 
                                radius_inner_core, radius_top_flayer, verbose=True):
     # FIXME: other parameters should be arguments
-
-    print("ODE solved for all nuclation depths... calculating integrals over nuclation depth for particle density")
+    if verbose:
+        print("ODE solved for all nuclation depths... calculating integrals over nuclation depth for particle density")
     particle_densities = np.zeros_like(analysis_depths)
     solid_vf = np.zeros_like(analysis_depths)
     particle_radius_histogram = np.zeros((analysis_depths.size, integration_depths.size))
@@ -494,7 +516,12 @@ def evaluate_partcle_densities(solutions, analysis_depths, integration_depths, n
         if verbose:
             print("Solid volume fraction at r = ", analysis_r, " is ", solid_vf[i])
         
-    # Evaluate seperation of particles (to allow self consistent solution)
+    return particle_densities, solid_vf, particle_radius_unnormalised, particle_radius_histogram
+
+
+def evaluate_particle_seperation(particle_densities, analysis_depths, verbose=True):
+
+    # Evaluate seperation of particles
     calculated_seperation = np.zeros_like(analysis_depths)
     for i, rad in enumerate (analysis_depths):
         rho = particle_densities[i]
@@ -506,13 +533,13 @@ def evaluate_partcle_densities(solutions, analysis_depths, integration_depths, n
         calculated_seperation[i] = sep
         if verbose:
             print("Ar r =", rad, "m, particle density = ", rho, 'per m^3, calculated seperation radius = ', sep, 'm')
-       
-    return particle_densities, calculated_seperation, solid_vf, particle_radius_unnormalised, particle_radius_histogram
-
-
+            
+    return calculated_seperation
+    
 # Just calculate the core growth rate.
 def evaluate_core_growth_rate(solutions, integration_depths, nucleation_rates, radius_inner_core, verbose=True):
-    print("\nODE solved for all nuclation depths... calculating integrals over nuclation depth for inner core growth")
+    if verbose:
+        print("\nODE solved for all nuclation depths... calculating integrals over nuclation depth for inner core growth")
     
     # IC growth rate should be okay
     # We build up an array of solid volume as a function
@@ -540,7 +567,7 @@ def evaluate_core_growth_rate(solutions, integration_depths, nucleation_rates, r
     secinMyr = 60.0*60.0*24.0*365.0*1000000.0
     growth_rate = growth_rate/1000.0 * secinMyr
     if verbose:
-        print("Inner core growth rate:", growth_rate/1000.0 * secinMyr, "km/Myr (or mm/yr)")
+        print("Inner core growth rate:", growth_rate, "km/Myr (or mm/yr)")
     return growth_rate
     
     
@@ -562,16 +589,17 @@ def integrate_snow_zone(analysis_depths, radius_inner_core, radius_top_flayer, i
                                                        int_depth, xl_func, tfunc, pfunc,
                                                        dl, k0, gfunc, mu, radius_inner_core, analysis_depths)
         assert sol.success, "No ODE solution found!"
-        report_all_solution_events(sol, analysis_depths)
+        if verbose:
+            report_all_solution_events(sol, analysis_depths)
         solutions.append(sol)
     
-    particle_densities, calculated_seperation, solid_vf, \
+    particle_densities, solid_vf, \
         particle_radius_unnormalised, particle_radius_histogram = evaluate_partcle_densities(solutions, 
                                         analysis_depths, integration_depths, nucleation_rates, radius_inner_core, 
                                                                                              radius_top_flayer, verbose=verbose)
     
     growth_rate = evaluate_core_growth_rate(solutions, integration_depths, nucleation_rates, radius_inner_core)
     
-    return solutions, particle_densities, calculated_seperation, growth_rate, solid_vf, particle_radius_unnormalised, particle_radius_histogram
+    return solutions, particle_densities, growth_rate, solid_vf, particle_radius_unnormalised, particle_radius_histogram
     
     
