@@ -10,6 +10,7 @@
 Peicewise polynomials like PREM
 
 """
+import numba
 import numpy as np
 
 class PeicewisePolynomial(object):
@@ -42,11 +43,10 @@ class PeicewisePolynomial(object):
         
     def __call__(self, xp, break_down=False):
         if np.ndim(xp) == 0:
-            value = self._evaluate_at_point(xp, break_down)
+            value = _evaluate_ppoly(xp, self.coeffs, self.breakpoints, break_down)
         else:
-            value = np.zeros_like(xp)
-            for i in range(xp.size):
-                value[i] = self._evaluate_at_point(xp[i], break_down)
+            value = _evaluate_ppoly_array(xp, self.coeffs, self.breakpoints, break_down)
+        
         return value        
         
         
@@ -122,24 +122,7 @@ class PeicewisePolynomial(object):
     def integrate(self, a, b):
         
         #antiderivative = self.antiderivative()
-        integral = 0
-        lower_bound = a
-        for bpi, bp in enumerate(self.breakpoints):
-            if bp > lower_bound:
-                if self.breakpoints[bpi] >= b:
-                    # Just the one segment left - add it and end
-                    integral = integral + (self(b, break_down=True) - 
-                                           self(lower_bound))
-                    #print(integral, lower_bound, b, 'done')
-                    break
-                else:
-                    # segment from lower bound to bp
-                    # add it, increment lower_bound and contiue
-                    integral = integral + (self(bp, break_down=True) - 
-                                           self(lower_bound))
-                    #print(integral, lower_bound, bp)
-                    lower_bound = bp
-
+        integral = _integrate_ppoly_from_antideriv(a, b, self.coeffs, self.breakpoints)
         return integral
     
     
@@ -157,3 +140,61 @@ class PeicewisePolynomial(object):
                     
         mult_poly = PeicewisePolynomial(mult_coefs, mult_breakpoints)
         return mult_poly
+
+    
+@numba.jit(nopython=True)
+def _integrate_ppoly_from_antideriv(a, b, coeffs, bps):
+    integral = 0
+    lower_bound = a
+    for bpi, bp in enumerate(bps):
+        if bp > lower_bound:
+            if bps[bpi] >= b:
+                # Just the one segment left - add it and end
+                integral = integral + (_evaluate_ppoly(b, coeffs, bps, True) - 
+                                       _evaluate_ppoly(lower_bound, coeffs, bps, False))
+                break
+            else:
+                # segment from lower bound to bp
+                # add it, increment lower_bound and contiue
+                integral = integral + (_evaluate_ppoly(bp, coeffs, bps, True) - 
+                                       _evaluate_ppoly(lower_bound, coeffs, bps, False))
+                lower_bound = bp
+
+    return integral
+    
+@numba.jit(nopython=True)
+def _evaluate_ppoly_array(xs, coeffs, bps, break_down):   
+
+    values = np.zeros_like(xs)
+    for i in range(xs.size):
+        values[i] = _evaluate_ppoly(xs[i], coeffs, bps, break_down)
+    return values
+    
+    
+@numba.jit(nopython=True)
+def _evaluate_ppoly(x, coeffs, bps, break_down): 
+     
+    # Get the poly coeffs at x
+    coef = None
+    if x == bps[-1]:
+        # We use the last coefficents for the outside point
+        coef = coeffs[-1,:]
+    elif break_down:
+        for i in range(bps.size):
+            if ((x > bps[i]) and (x <= bps[i+1])):
+                coef = coeffs[i,:]
+                break
+    else:
+        for i in range(bps.size):
+            if ((x >= bps[i]) and (x < bps[i+1])):
+                coef = coeffs[i,:]
+                break
+        
+    assert coef is not None                         
+                         
+    # Now evaluate at x
+    value = 0
+    for i, c in enumerate(coef):
+        value = value + c * x**i
+        
+    return value
