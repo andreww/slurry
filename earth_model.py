@@ -10,7 +10,7 @@
 Support for PREM-like 1D Earth models
 
 """
-
+import numba
 import numpy as np
 import scipy.integrate as spint
 
@@ -237,7 +237,8 @@ class Prem(object):
         if np.ndim(r) == 0:
             # 10 km grid spacing
             rs = np.arange(r, self.r_earth, 1.0)
-            g = self.gravity(rs)
+            #g = self.gravity(rs)
+            g = _gravity_for_pressure(rs, self.mass_poly.coeffs, self.mass_poly.breakpoints)
             rho = self.density(rs)
             ps = spint.cumtrapz((-g*rho)[::-1],rs[::-1]*1000.0, initial=0)
             pressure = ps[-1]/1E9
@@ -441,3 +442,20 @@ class Prem(object):
                                              vps, vss, qks, qms], 
                       names='depth, radius, density, vp, vs, qkappa, qshear')
         return result
+    
+@numba.jit(nopython=True)
+def _gravity_for_pressure(r, mass_poly_coeffs, mass_poly_breakpoints):
+    """
+    Evaluate acceleration due to gravity at radius r in m/s^2
+    """
+    G = 6.6743E-11
+
+    g = np.zeros_like(r)
+    for i in range(r.size):
+        if r[i] == 0:
+            g[i] = 0.0
+        else:
+            g[i] = pp._integrate_ppoly_from_antideriv(0.0, 
+                   r[i], mass_poly_coeffs, mass_poly_breakpoints) / \
+                                                      ((r[i]*1000)**2)*G 
+    return g
