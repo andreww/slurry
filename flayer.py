@@ -420,18 +420,20 @@ def partial_particle_density(ivp_solution, event_index, nucleation_rate, nucleat
         # to get the distance
         assert ivp_solution.sol(analysis_time)[1] == analysis_radius, "event / interpolator missmatch"
         if (analysis_time - tau) < 0.0:
-            print("cannot process if next particle has yet to form")
+            if verbose:
+                print("cannot process if next particle has yet to form")
             return 0.0
         if (analysis_time + tau) > ivp_solution.t[-1]:
-            print("cannot process if previous particle has gone")
+            if verbose:
+                print("cannot process if previous particle has gone")
             return 0.0
         distance_below = analysis_radius - ivp_solution.sol(analysis_time + tau)[1]
         distance_above = ivp_solution.sol(analysis_time - tau)[1] - analysis_radius
         partial_density = 1.0 / (0.5 * (distance_below + distance_above)) # /m^3 - see notebook!
         if verbose:
-            print("Partial density calculation at r = ", analysis_radius, "m")
-            print("At time t = ", analysis_time, "s, and tau = ", tau, "s")
-            print("Previous particle is", distance_below, "m below, next particle is", distance_above, "m above")
+            print("Partial density calculation at r = ", analysis_radius, "m", end=" ")
+            print("At time t = ", analysis_time, "s, and tau = ", tau, "s", end=" ")
+            print("Previous particle is", distance_below, "m below, next particle is", distance_above, "m above", end=" ")
             print("Partial particle densituy is", partial_density, "particles / m^3")     
     else:
         # No particles at this depth (above nucleation depth or dissolved)
@@ -471,25 +473,25 @@ def evaluate_partcle_densities(solutions, analysis_depths, integration_depths, n
             nuc_area = 1000.0*1000.0
             if j == 0:
                 # Innermost layer
-                nuc_vol = nuc_area * (integration_depths[0] + 0.5 * (
-                                      integration_depths[1] - integration_depths[0])
-                                     ) - radius_inner_core 
+                top = integration_depths[j] + (0.5 * (integration_depths[j+1] - integration_depths[j]))
+                bot = radius_inner_core
+                
             elif (j + 1) == integration_depths.size:
                 # Outermost layer
-                nuc_vol = nuc_area * radius_top_flayer - (integration_depths[-2] + 0.5 * (
-                                      integration_depths[-1] - integration_depths[-2])
-                                     )
+                top = radius_top_flayer
+                bot = integration_depths[j] - (0.5 * (integration_depths[j] - integration_depths[j-1]))
+                
             else:
-                nuc_vol = nuc_area * ((integration_depths[j] + 0.5 * (
-                                      integration_depths[j+1] - integration_depths[j]))
-                                  - (integration_depths[j-1] + 0.5 * (
-                                      integration_depths[j] - integration_depths[j-1])
-                                    ))
+                # Inside - top and bottom are half way between point and point above or below.
+                top = integration_depths[j] + (0.5 * (integration_depths[j+1] - integration_depths[j]))
+                bot = integration_depths[j] - (0.5 * (integration_depths[j] - integration_depths[j-1]))
+             
+            nuc_height = top - bot
+            nuc_vol = nuc_area * nuc_height
             if verbose:
-                print("\nPartial density calc for i = ", i, "and j = ", j, "nuc_rate = ", nuc_rate, "nuc_vol = ", nuc_vol)
-                print("Analysis r = ", analysis_r, "int r = ", int_r)
+                print("\nPartial density calc for r =", analysis_r, "with nuc at r =", int_r, "nuc_rate = ", nuc_rate, "nuc_vol = ", nuc_vol)
             partial_densities[j] = partial_particle_density(solutions[j], analysis_index, 
-                                                            nuc_rate, nuc_vol, verbose=verbose)
+                                                            nuc_rate, nuc_vol, verbose=False)
             
             # Put radius at this radius and nuc radius in radius histogram
             if solutions[j].t_events[analysis_index].size > 0:
@@ -583,6 +585,7 @@ def integrate_snow_zone(analysis_depths, radius_inner_core, radius_top_flayer, i
     """
     solutions = []
     for int_depth in integration_depths:
+        int_depth = int_depth + 1.0E-3
         if verbose:
             print("Starting ODE IVP solver for nuclation at", int_depth)
         sol = particle_evolution.falling_growing_particle_solution(start_time, max_time, initial_particle_size, 
