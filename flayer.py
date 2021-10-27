@@ -293,7 +293,7 @@ def evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time, initial_pa
         moles_solid = (solid_vf[i] * 100.0**3) / mol_vol_solid
         moles_liquid = ((1.0 - solid_vf[i]) * 100.0**3) / mol_vol_liquid
         mol_frac_solid = moles_solid / (moles_solid + moles_liquid)
-        xl_points[i] = xfunc(analysis_r) / (1.0 - mol_frac_solid)
+        xl_points[i] = xfunc(analysis_r) * (1.0 - mol_frac_solid)
     xl_func = spi.interp1d(analysis_radii, xl_points, fill_value='extrapolate')
     
     converged = False
@@ -319,7 +319,7 @@ def evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time, initial_pa
             moles_solid = (solid_vf[i] * 100.0**3) / mol_vol_solid
             moles_liquid = ((1.0 - solid_vf[i]) * 100.0**3) / mol_vol_liquid
             mol_frac_solid = moles_solid / (moles_solid + moles_liquid)
-            xl_points[i] = xfunc(analysis_r) / (1.0 - mol_frac_solid)
+            xl_points[i] = xfunc(analysis_r) * (1.0 - mol_frac_solid)
         xl_func = spi.interp1d(analysis_radii, xl_points, fill_value='extrapolate')
         
     return solutions, particle_densities, growth_rate, solid_vf, \
