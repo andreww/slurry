@@ -300,27 +300,27 @@ def evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time, initial_pa
     while not converged:
         # Recalculate solution with updated (TODO: xl...)
         solutions, particle_densities, growth_rate, solid_vf, \
-             new_particle_radius_unnormalised, particle_radius_histogram = integrate_snow_zone(
+             particle_radius_unnormalised, particle_radius_histogram = integrate_snow_zone(
              analysis_radii, radius_inner_core, radius_top_flayer, 
              nucleation_radii, nucleation_rates, tfunc, xl_func, pfunc, gfunc,
              start_time, max_time, initial_particle_size, k0, dl, mu, verbose=verbose)
         
-        converged = np.allclose(particle_radius_unnormalised, new_particle_radius_unnormalised,
-                                atol=max_absolute_error, rtol=max_rel_error)
-        
-        particle_radius_unnormalised = new_particle_radius_unnormalised
-        
         # Work out the updated liquid composition to maintain mass  
         # FIXME: to function
-        xl_points = np.zeros_like(analysis_radii)
+        new_xl_points = np.zeros_like(analysis_radii)
         for i, analysis_r in enumerate(analysis_radii):
             _, mol_vol_solid, _ = feot.solid_molar_volume(1.0, pfunc(analysis_r), tfunc(analysis_r))
             mol_vol_liquid, _, _ = feot.liquid_molar_volume(xl_func(analysis_r), pfunc(analysis_r), tfunc(analysis_r))
             moles_solid = (solid_vf[i] * 100.0**3) / mol_vol_solid
             moles_liquid = ((1.0 - solid_vf[i]) * 100.0**3) / mol_vol_liquid
             mol_frac_solid = moles_solid / (moles_solid + moles_liquid)
-            xl_points[i] = xfunc(analysis_r) * (1.0 - mol_frac_solid)
+            new_xl_points[i] = xfunc(analysis_r) * (1.0 - mol_frac_solid)
         xl_func = spi.interp1d(analysis_radii, xl_points, fill_value='extrapolate')
+        
+        converged = np.allclose(xl_points, new_xl_points,
+                                atol=max_absolute_error, rtol=max_rel_error)
+        
+        xl_points = new_xl_points
         
     return solutions, particle_densities, growth_rate, solid_vf, \
         particle_radius_unnormalised, particle_radius_histogram, xl_func 
