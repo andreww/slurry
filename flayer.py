@@ -219,7 +219,7 @@ def setup_flayer_functions(r_icb, r_cmb, r_flayer_top, gamma, delta_t_icb, xfe_a
 
 def evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time, initial_particle_size,
                     k0, dl, mu, nucleation_radii, nucleation_rates, analysis_radii, radius_inner_core, 
-                    radius_top_flayer, max_rel_error=0.01, max_absolute_error=0.001, verbose=True):
+                    radius_top_flayer, max_rel_error=1.0E-7, max_absolute_error=1.0E-10, verbose=True):
     """
     Create a self consistent solution for the F-layer assuming non-equilibrium growth and falling
     of iron crystals
@@ -276,6 +276,7 @@ def evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time, initial_pa
     
     # Set initial liquid compositioon # TODO: pass xfunc in as argument 
     xl_func = spi.interp1d(analysis_radii, xfunc(analysis_radii), fill_value='extrapolate')
+    steps = 0
     
     # Calculate an initial guess using the provided liquid compositioon (TODO: pass in xl)
     solutions, particle_densities, growth_rate, solid_vf, \
@@ -298,6 +299,7 @@ def evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time, initial_pa
     
     converged = False
     while not converged:
+        steps = steps + 1
         # Recalculate solution with updated (TODO: xl...)
         solutions, particle_densities, growth_rate, solid_vf, \
              particle_radius_unnormalised, particle_radius_histogram = integrate_snow_zone(
@@ -319,6 +321,15 @@ def evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time, initial_pa
         
         converged = np.allclose(xl_points, new_xl_points,
                                 atol=max_absolute_error, rtol=max_rel_error)
+        
+        if verbose:
+            if converged:
+                print("Iteration", steps, "maximum absolute liquid composition difference is", 
+                      np.max(np.absolute(xl_points - new_xl_points)))
+                print("Liquid composition in F-layer has converged!")
+            else:
+                print("Iteration", steps, "maximum absolute liquid composition difference is", 
+                      np.max(np.absolute(xl_points - new_xl_points)))
         
         xl_points = new_xl_points
         
