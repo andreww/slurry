@@ -98,7 +98,7 @@ def flayer_case(f_layer_thickness, delta_t_icb, xfe_outer_core, xfe_icb,
     
     # doit!
     solutions, particle_densities, growth_rate, solid_vf, \
-        particle_radius_unnormalised, particle_radius_histogram = evaluate_flayer(tfunc, xfunc, 
+        particle_radius_unnormalised, particle_radius_histogram, opt_xlfunc = evaluate_flayer(tfunc, xfunc, 
         pfunc, gfunc, start_time, max_time, initial_particle_size, growth_prefactor, 
         chemical_diffusivity, kinematic_viscosity, nucleation_radii, 
         nucleation_rates, analysis_radii, r_icb, 
@@ -323,7 +323,7 @@ def evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time, initial_pa
         xl_func = spi.interp1d(analysis_radii, xl_points, fill_value='extrapolate')
         
     return solutions, particle_densities, growth_rate, solid_vf, \
-        particle_radius_unnormalised, particle_radius_histogram 
+        particle_radius_unnormalised, particle_radius_histogram, xl_func 
 
 
 def analyse_flayer(solutions, integration_radii, analysis_radii, nucleation_rates, radius_inner_core,
