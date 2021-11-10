@@ -23,7 +23,7 @@ import nucleation
 
 def flayer_case(f_layer_thickness, delta_t_icb, xfe_outer_core, xfe_icb,
                 initial_particle_size, growth_prefactor, chemical_diffusivity,
-                kinematic_viscosity, number_of_nucleation_points, 
+                kinematic_viscosity, i0, surf_energy, 
                 number_of_analysis_points,
                 r_icb=1221.5E3, r_cmb=3480.0E3, gruneisen_parameter=1.5,
                 start_time=0.0, max_time=1.0E12, max_rel_error=0.01,
@@ -54,7 +54,8 @@ def flayer_case(f_layer_thickness, delta_t_icb, xfe_outer_core, xfe_icb,
     * growth_prefactor: prefactor for particle growth rate (m/s)
     * chemical_diffusivity: diffusivity of oxygen in liquid iron (UNITS?)
     * kinematic_viscosity: kinematic viscosity of liquid iron(UNITS)
-    * number_of_nucleation_points: how many points to allow particle nucleation (-)
+    * i0: prefactor for CNT (s^-1 m^-3)
+    * surf_energy: surface energy for CNT (J m^-2)
     * number_of_analysis_ponts: how many points to perform liquid composition
       and other analysis (-)
     
@@ -87,22 +88,16 @@ def flayer_case(f_layer_thickness, delta_t_icb, xfe_outer_core, xfe_icb,
          r_flayer_top, gruneisen_parameter, delta_t_icb, xfe_outer_core, xfe_icb)
     
     # Discretisation points
-    
-    grid_offset = 250.0 # FIXME!
-    nucleation_radii = np.linspace(r_icb+inner_core_offset, 
-                                   r_flayer_top, number_of_nucleation_points)
-    analysis_radii = np.linspace(r_icb+inner_core_offset-grid_offset, 
-                                 r_flayer_top-grid_offset, number_of_analysis_points)
-    
-    # FIXME!
-    nucleation_rates = np.ones_like(nucleation_radii)*1.0E-14 # should it be a function even if it always constant?
+    nucleation_radii = np.linspace(r_icb, r_flayer_top, number_of_analysis_points)
+    analysis_radii = np.linspace(r_icb, r_flayer_top, number_of_analysis_points)
     
     # doit!
     solutions, particle_densities, growth_rate, solid_vf, \
-        particle_radius_unnormalised, particle_radius_histogram, opt_xlfunc = evaluate_flayer(tfunc, xfunc, 
-        pfunc, gfunc, start_time, max_time, initial_particle_size, growth_prefactor, 
-        chemical_diffusivity, kinematic_viscosity, nucleation_radii, 
-        nucleation_rates, analysis_radii, r_icb, 
+        particle_radius_unnormalised, particle_radius_histogram, opt_xlfunc, \
+        crit_nuc_radii, nucleation_rates = evaluate_flayer(tfunc, xfunc, 
+        pfunc, gfunc, start_time, max_time, growth_prefactor, 
+        chemical_diffusivity, kinematic_viscosity, i0, surf_energy,
+        nucleation_radii, analysis_radii, r_icb, 
         r_flayer_top, max_rel_error=max_rel_error, max_absolute_error=max_absolute_error,
                                                                                  verbose=False)
     
