@@ -55,12 +55,16 @@ def well_mixed_nucleation(gamma, gsl):
     """
     # rc
     rc = -2*gamma / gsl
-    mask = rc<=0.0 # negative radius is > Tm
-    rc[mask] = np.nan
+    #mask = rc<=0.0 # negative radius is > Tm
+    #rc[mask] = np.nan
+    
     
     # gc
     gc = (16.0 * np.pi * gamma**3) / (3.0 * gsl**2) # in J?
-    gc[mask] = np.nan
+    #gc[mask] = np.nan
+    if rc <= 0.0:
+        rc = np.nan
+        gc = np.nan
     
     return rc, gc
 
