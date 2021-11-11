@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import warnings
 import numpy as np
 import scipy.optimize
 
@@ -52,6 +53,11 @@ def zhang_particle_dynamics(radius, kinematic_viscosity, gravity,
     # First calculate Re and the falling velocity 
     falling_velocity, re, drag_coefficient = self_consistent_falling_velocity(radius, 
                                   kinematic_viscosity, gravity, delta_density, fluid_density)
+    
+    if re >= 3.0E5:
+        warnings.warn(
+            "Calculated Re {:g} too high for drag / velocity parameterisation. Treat results with care".format(re))
+        
     # Dimensionless numbers
     pr, pe_t, sc, pe_c, fr = dimensionless_numbers(radius, re, falling_velocity, kinematic_viscosity, 
                           chemical_diffusivity, thermal_diffusivity, brunt_vaisala)    
@@ -136,14 +142,20 @@ def boundary_layers(radius, re, pe_c, sc, pr):
         delta_t = 2.0 * radius
     elif re < 1e2 and re >= 1e-2:               # Intermediate Re case
         delta_u = 2.0 * radius
-        delta_t = 2.0 * radius                 # For T, apply low Re limit as Pe is low till Re~100
-        delta_c = 2.0 * pe_c**(-1/3) * 2.0 * radius
+        delta_t = 2.0 * radius                  # For T, apply low Re limit as Pe is low till Re~100
+        # Prefactor for delta_c must match low and intermediate regimes at re=1e-2 and this is depends
+        # on pe_c, which is re.sc, so use sc to build prefactor
+        delta_c_prefac = (1.0E-2*sc)**(1/3)
+        delta_c = delta_c_prefac * pe_c**(-1/3) * 2.0 * radius
     elif re >= 1e2:                             # High Re case
-        delta_u = re**(-0.5) * 2.0 * radius 
-        delta_c = 4.5 * re**(-0.5) * (sc)**(-1/3) * 2.0 * radius # FIXME: where does the 4.5 come from?
-        delta_t = 3.0 * re**(-0.5) * (pr)**(-0.5) * 2.0 * radius # FIXME: where does the 3 come from?
-    # FIXME - limits on Re.
-    
+        delta_u_prefac = 10.0 # Only depends on Re...
+        delta_u = 10.0 * re**(-0.5) * 2.0 * radius
+        delta_t_prefac = 10.0 * pr**(0.5)
+        delta_t = 3.0 * re**(-0.5) * (pr)**(-0.5) * 2.0 * radius
+        delta_c_prefac = (1.0E-2*sc)**(1/3) * (1.0E2*sc)**(-1/3) * (1.0E2)**(1/2) * sc**(1/3)
+        delta_c = delta_c_prefac * re**(-0.5) * (sc)**(-1/3) * 2.0 * radius 
+         
+        
     return delta_u, delta_c, delta_t
 
 
