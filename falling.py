@@ -7,7 +7,7 @@ import scipy.optimize
 @np.vectorize
 def zhang_particle_dynamics(radius, kinematic_viscosity, gravity, 
                             delta_density, fluid_density, thermal_diffusivity,
-                            chemical_diffusivity, brunt_vaisala=None):
+                            chemical_diffusivity, brunt_vaisala=None, warn_reynolds=True):
     """
     Calculate falling velocity and dynamical properties of a falling sphere
     
@@ -29,6 +29,9 @@ def zhang_particle_dynamics(radius, kinematic_viscosity, gravity,
     * chemical_diffusivity: chemical diffusivity of fluid (m^2/s)
     * brunt_vaisala: Brunt–Väisälä frequency. Optional argument. If None (the default)
           an estimate for the outer core is used. (Hz)
+    * warn_reynolds: generate python warning if the calculated Reynolds number / falling
+          velocity / drag coefficent is too large for the emprical scaling. Optional 
+          argument. Default is True (check and generate warning).
     
     Returns:
     * falling_velocity: velocity of particle, positive downwards (m/s)
@@ -54,7 +57,7 @@ def zhang_particle_dynamics(radius, kinematic_viscosity, gravity,
     falling_velocity, re, drag_coefficient = self_consistent_falling_velocity(radius, 
                                   kinematic_viscosity, gravity, delta_density, fluid_density)
     
-    if re >= 3.0E5:
+    if warn_reynolds and (re >= 3.0E5):
         warnings.warn(
             "Calculated Re {:g} too high for drag / velocity parameterisation. Treat results with care".format(re))
         
