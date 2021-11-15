@@ -65,7 +65,7 @@ def zhang_particle_dynamics(radius, kinematic_viscosity, gravity,
     pr, pe_t, sc, pe_c, fr = dimensionless_numbers(radius, re, falling_velocity, kinematic_viscosity, 
                           chemical_diffusivity, thermal_diffusivity, brunt_vaisala)    
     # Boundary layer analysis
-    delta_u, delta_c, delta_t = boundary_layers(radius, re, pe_c, sc, pr)
+    delta_u, delta_c, delta_t = boundary_layers(radius, re, pe_c, pe_t, sc, pr, fr)
     
     return falling_velocity, drag_coefficient, re, pe_t, pe_c, fr, delta_u, delta_t, delta_c
 
@@ -123,7 +123,7 @@ def stokes_falling_velocity(radius, kinematic_viscosity, gravity, delta_density,
 
 
 @np.vectorize
-def boundary_layers(radius, re, pe_c, sc, pr):
+def boundary_layers(radius, re, pe_c, pe_t, sc, pr, fr):
     """
     Dimensional analysis of boundary layer thicknesses for falling particle
     
@@ -133,30 +133,50 @@ def boundary_layers(radius, re, pe_c, sc, pr):
     * pr: Prandtl number
     * sc: Schmidt number (-)
     * pe_c: Chemical Péclet number (-)
+    * pe_t: Thermal Péclet number (-)
+    * fr: Froude number (-)
 
     Returns:
     * delta_u: thickness of mementum boundary layer (m)
     * delta_t: thickness of thermal boundary layer (m)
     * delta_c: thickness of chemical boundary layer (m)
     """
-    if re < 1e-2:
-        delta_u = 2.0 * radius
+    if fr >= 10.0:
+        if re < 1.0e-2:
+            delta_u = 2.0 * radius
+            delta_c = 2.0 * radius
+            delta_t = 2.0 * radius
+        elif re < 1.0e2 and re >= 1.0e-2:               # Intermediate Re case
+            delta_u = 2.0 * radius
+            delta_t = 2.0 * radius                  # For T, apply low Re limit as Pe is low till Re~100
+            # Prefactor for delta_c must match low and intermediate regimes at re=1e-2 and this is depends
+            # on pe_c, which is re.sc, so use sc to build prefactor
+            delta_c_prefac = (1.0E-2*sc)**(1/3)
+            delta_c = delta_c_prefac * pe_c**(-1/3) * 2.0 * radius
+        elif re >= 1.0e2:                             # High Re case
+            delta_u_prefac = 10.0 # Only depends on Re... sqrt(100)
+            delta_u = 10.0 * re**(-0.5) * 2.0 * radius
+            delta_t_prefac = 10.0 * pr**(0.5) # But this just leads to delta_u scaling. 
+            delta_t = delta_t_prefac * re**(-0.5) * (pr)**(-0.5) * 2.0 * radius
+            delta_c_prefac = (1.0E-2*sc)**(1/3) * (1.0E2*sc)**(-1/3) * (1.0E2)**(1/2) * sc**(1/3)
+            delta_c = delta_c_prefac * re**(-0.5) * (sc)**(-1/3) * 2.0 * radius
+            
+    else: # Low Fr...
+        delta_u = (fr/re)**(0.5) * 2.0 * radius
+        if delta_u > 2.0 * radius:
+            delta_u = 2.0 * radius
+            delta_c = 2.0 * radius
+            delta_t = 2.0 * radius
+        else:
+            delta_c = fr**(1/6) / (re**(1/6) * pe_c**(1/6)) * 2.0 * radius
+            delta_t = fr**(1/6) / (re**(1/6) * pe_t**(1/6)) * 2.0 * radius
+            
+    # But if Peclet number is < 1e-2 the thermal or chemical BL is weak (Inman, first para of 
+    # section 3.2. Only matters if Pr or Sc outweigh Re.
+    if pe_c < 1.0e-2:
         delta_c = 2.0 * radius
+    if pe_t < 1.0e-2:
         delta_t = 2.0 * radius
-    elif re < 1e2 and re >= 1e-2:               # Intermediate Re case
-        delta_u = 2.0 * radius
-        delta_t = 2.0 * radius                  # For T, apply low Re limit as Pe is low till Re~100
-        # Prefactor for delta_c must match low and intermediate regimes at re=1e-2 and this is depends
-        # on pe_c, which is re.sc, so use sc to build prefactor
-        delta_c_prefac = (1.0E-2*sc)**(1/3)
-        delta_c = delta_c_prefac * pe_c**(-1/3) * 2.0 * radius
-    elif re >= 1e2:                             # High Re case
-        delta_u_prefac = 10.0 # Only depends on Re...
-        delta_u = 10.0 * re**(-0.5) * 2.0 * radius
-        delta_t_prefac = 10.0 * pr**(0.5)
-        delta_t = 3.0 * re**(-0.5) * (pr)**(-0.5) * 2.0 * radius
-        delta_c_prefac = (1.0E-2*sc)**(1/3) * (1.0E2*sc)**(-1/3) * (1.0E2)**(1/2) * sc**(1/3)
-        delta_c = delta_c_prefac * re**(-0.5) * (sc)**(-1/3) * 2.0 * radius 
          
         
     return delta_u, delta_c, delta_t
