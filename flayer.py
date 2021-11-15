@@ -93,7 +93,7 @@ def flayer_case(f_layer_thickness, delta_t_icb, xfe_outer_core, xfe_icb,
     
     # doit!
     solutions, particle_densities, growth_rate, solid_vf, \
-        particle_radius_unnormalised, particle_radius_histogram, opt_xlfunc, \
+        particle_radius_unnormalised, partial_particle_densities, opt_xlfunc, \
         crit_nuc_radii, nucleation_rates = evaluate_flayer(tfunc, xfunc, 
         pfunc, gfunc, start_time, max_time, growth_prefactor, 
         chemical_diffusivity, kinematic_viscosity, i0, surf_energy,
@@ -104,10 +104,10 @@ def flayer_case(f_layer_thickness, delta_t_icb, xfe_outer_core, xfe_icb,
     # Post-solution analysis
     calculated_seperation, growth_rate = analyse_flayer(solutions, nucleation_radii, analysis_radii, nucleation_rates, r_icb,
                    particle_densities, growth_rate, solid_vf, \
-                   particle_radius_unnormalised, particle_radius_histogram, verbose=True)
+                   particle_radius_unnormalised, partial_particle_densities, verbose=True)
     
     return analysis_radii, particle_densities, calculated_seperation, solid_vf, \
-        particle_radius_unnormalised, particle_radius_histogram, growth_rate
+        particle_radius_unnormalised, partial_particle_densities, growth_rate
 
 
 def setup_flayer_functions(r_icb, r_cmb, r_flayer_top, gamma, delta_t_icb, xfe_adiabatic, xfe_icb):
@@ -287,7 +287,7 @@ def evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
     
     # Calculate an initial guess using the provided liquid compositioon (TODO: pass in xl)
     solutions, particle_densities, growth_rate, solid_vf, \
-        particle_radius_unnormalised, particle_radius_histogram = integrate_snow_zone(
+        particle_radius_unnormalised, partial_particle_densities = integrate_snow_zone(
         analysis_radii, radius_inner_core, radius_top_flayer, nucleation_radii, 
         nucleation_rates, tfunc, xl_func, pfunc, gfunc,
         start_time, max_time, crit_nuc_radii, k0, dl, mu, verbose=verbose)
@@ -315,7 +315,7 @@ def evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
         
         # Recalculate solution with updated (TODO: xl...)
         solutions, particle_densities, growth_rate, solid_vf, \
-             particle_radius_unnormalised, particle_radius_histogram = integrate_snow_zone(
+             particle_radius_unnormalised, partial_particle_densities = integrate_snow_zone(
              analysis_radii, radius_inner_core, radius_top_flayer, 
              nucleation_radii, nucleation_rates, tfunc, xl_func, pfunc, gfunc,
              start_time, max_time, crit_nuc_radii, k0, dl, mu, verbose=verbose)
@@ -347,12 +347,12 @@ def evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
         xl_points = new_xl_points
         
     return solutions, particle_densities, growth_rate, solid_vf, \
-        particle_radius_unnormalised, particle_radius_histogram, xl_func, crit_nuc_radii, nucleation_rates
+        particle_radius_unnormalised, partial_particle_densities, xl_func, crit_nuc_radii, nucleation_rates
 
 
 def analyse_flayer(solutions, integration_radii, analysis_radii, nucleation_rates, radius_inner_core,
                    particle_densities, growth_rate, solid_vf, \
-                   particle_radius_unnormalised, particle_radius_histogram, verbose=True):
+                   particle_radius_unnormalised, partial_particle_densities, verbose=True):
     """
     Perform post-processing analysis of solution
     
@@ -477,7 +477,7 @@ def evaluate_partcle_densities(solutions, analysis_depths, integration_depths, n
         print("ODE solved for all nuclation depths... calculating integrals over nuclation depth for particle density")
     particle_densities = np.zeros_like(analysis_depths)
     solid_vf = np.zeros_like(analysis_depths)
-    particle_radius_histogram = np.zeros((analysis_depths.size, integration_depths.size))
+    partial_particle_densities = np.zeros((analysis_depths.size, integration_depths.size))
     particle_radius_unnormalised = np.zeros((analysis_depths.size, integration_depths.size))
     for i, analysis_r in enumerate(analysis_depths):
         analysis_index = i + 2
@@ -523,17 +523,17 @@ def evaluate_partcle_densities(solutions, analysis_depths, integration_depths, n
             # Put radius at this radius and nuc radius in radius histogram
             if solutions[j] is None:
                 particle_radius_unnormalised[i,j] = 0.0
-                particle_radius_histogram[i,j] = 0.0
+                partial_particle_densities[i,j] = 0.0
                 partial_radius[j] = 0.0
             elif solutions[j].t_events[analysis_index].size > 0:
                 # Triggered event - no check for double crossing as partial_particle_density will have done this
                 particle_radius_unnormalised[i,j] = solutions[j].y_events[analysis_index][0][0]
-                particle_radius_histogram[i,j] = particle_radius_unnormalised[i,j]*partial_densities[j]
+                partial_particle_densities[i,j] = partial_densities[j]
                 partial_radius[j] = particle_radius_unnormalised[i,j]
             else:
                 # Melted etc
                 particle_radius_unnormalised[i,j] = 0.0
-                particle_radius_histogram[i,j] = 0.0
+                partial_particle_densities[i,j] = 0.0
                 partial_radius[j] = 0.0
             
         # Number density of particles at this radius
@@ -549,7 +549,7 @@ def evaluate_partcle_densities(solutions, analysis_depths, integration_depths, n
         if verbose:
             print("Solid volume fraction at r = ", analysis_r, " is ", solid_vf[i])
         
-    return particle_densities, solid_vf, particle_radius_unnormalised, particle_radius_histogram
+    return particle_densities, solid_vf, particle_radius_unnormalised, partial_particle_densities
 
 
 def evaluate_particle_seperation(particle_densities, analysis_depths, verbose=True):
@@ -638,12 +638,12 @@ def integrate_snow_zone(analysis_depths, radius_inner_core, radius_top_flayer, i
         solutions.append(sol)
     
     particle_densities, solid_vf, \
-        particle_radius_unnormalised, particle_radius_histogram = evaluate_partcle_densities(solutions, 
+        particle_radius_unnormalised, partial_particle_densities = evaluate_partcle_densities(solutions, 
                                         analysis_depths, integration_depths, nucleation_rates, radius_inner_core, 
                                                                                              radius_top_flayer, verbose=verbose)
     
     growth_rate = evaluate_core_growth_rate(solutions, integration_depths, nucleation_rates, radius_inner_core)
     
-    return solutions, particle_densities, growth_rate, solid_vf, particle_radius_unnormalised, particle_radius_histogram
+    return solutions, particle_densities, growth_rate, solid_vf, particle_radius_unnormalised, partial_particle_densities
     
     
