@@ -596,7 +596,8 @@ def evaluate_core_growth_rate(solutions, integration_depths, nucleation_rates, r
             raise NotImplementedError
             
     area_icb = 4.0 * np.pi * radius_inner_core**2
-    growth_rate = np.trapz(particle_volumes * nucleation_rates * integration_depths**2 * 4.0 * np.pi, 
+    growth_rate = np.trapz(particle_volumes * np.nan_to_num(nucleation_rates, nan=0.0) 
+                           * integration_depths**2 * 4.0 * np.pi, 
                            integration_depths) / area_icb
     
     if verbose:
