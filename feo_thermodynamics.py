@@ -134,7 +134,7 @@ def liquid_free_energy(x_fe, p, t):
 # Avoid hand coding loops. 
 liquid_free_energies = np.vectorize(liquid_free_energy)
 
-@numba.jit
+@numba.jit(nopython=True)
 def solid_free_energies(x_fe, p, t):
     """
     Free energy of the HCP Fe-FeO solid mixture and end members
@@ -160,7 +160,7 @@ def solid_free_energies(x_fe, p, t):
     return g_mixture, g_fe, g_feo
 
 
-@numba.jit
+@numba.jit(nopython=True)
 def fe_liquid_chemical_potential(x_fe, p, t):
     """
     Chemical potential of Fe in Fe-FeO liquid

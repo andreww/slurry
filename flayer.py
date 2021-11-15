@@ -282,8 +282,8 @@ def evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
     nucleation_rates = np.zeros_like(analysis_radii)
     for i, r in enumerate(analysis_radii):
         crit_nuc_radii[i], nucleation_rates[i] = nucleation.calc_nucleation(
-            xl_func(r), pfunc(r), tfunc(r), surf_energy, i0)
-        print("r =", r, "I = ", nucleation_rates[i])
+            float(xl_func(r)), float(pfunc(r)), float(tfunc(r)), surf_energy, i0)
+        print("R =", r, "I = ", nucleation_rates[i], "r0 = ", crit_nuc_radii[i])
     
     # Calculate an initial guess using the provided liquid compositioon (TODO: pass in xl)
     solutions, particle_densities, growth_rate, solid_vf, \
@@ -311,7 +311,7 @@ def evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
         # Recalculate nucleation rates and radii at each radius
         for i, r in enumerate(analysis_radii):
             crit_nuc_radii[i], nucleation_rates[i] = nucleation.calc_nucleation(
-                xl_func(r), pfunc(r), tfunc(r), surf_energy, i0)
+                float(xl_func(r)), float(pfunc(r)), float(tfunc(r)), surf_energy, i0)
         
         # Recalculate solution with updated (TODO: xl...)
         solutions, particle_densities, growth_rate, solid_vf, \
@@ -620,14 +620,14 @@ def integrate_snow_zone(analysis_depths, radius_inner_core, radius_top_flayer, i
     """
     solutions = []
     for i, int_depth in enumerate(integration_depths):
-        if nucleation_rates[i] < 1.0E-60:
+        if (nucleation_rates[i] < 1.0E-60) or (np.isnan(nucleation_rates[i])):
             print("Skipping this solution as no crystals form")
             sol = None
             
         else:
             int_depth = int_depth + 1.0E-3
             if verbose:
-                print("Starting ODE IVP solver for nuclation at", int_depth)
+                print("Starting ODE IVP solver for nuclation at", int_depth, "with r0", initial_particle_size[i])
             sol = particle_evolution.falling_growing_particle_solution(start_time, max_time, initial_particle_size[i], 
                                                        int_depth, xl_func, tfunc, pfunc,
                                                        dl, k0, gfunc, mu, radius_inner_core, analysis_depths)
