@@ -528,7 +528,7 @@ def evaluate_partcle_densities(solutions, analysis_depths, integration_depths, n
             elif solutions[j].t_events[analysis_index].size > 0:
                 # Triggered event - no check for double crossing as partial_particle_density will have done this
                 particle_radius_unnormalised[i,j] = solutions[j].y_events[analysis_index][0][0]
-                partial_particle_densities[i,j] = partial_densities[j]
+                partial_particle_densities[i,j] = ( partial_densities[j] * nuc_height )/ nuc_area
                 partial_radius[j] = particle_radius_unnormalised[i,j]
             else:
                 # Melted etc
