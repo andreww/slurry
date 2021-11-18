@@ -399,7 +399,7 @@ def report_all_solution_events(sol, analysis_depths):
     
     
 # Calculate parile seperation and 'partial' density
-def partial_particle_density(ivp_solution, event_index, nucleation_rate, nucleation_volume, verbose=True):
+def partial_particle_density(ivp_solution, event_index, nucleation_rate, nucleation_volume, num_areas, verbose=True):
     """
     Evaluate the 'partial' particle density at a given radius given a single solution to the IVP
     
@@ -437,6 +437,8 @@ def partial_particle_density(ivp_solution, event_index, nucleation_rate, nucleat
         # and want the position which is index 1 
         analysis_radius = ivp_solution.y_events[event_index][0][1]
         analysis_time = ivp_solution.t_events[event_index][0]
+        analysis_area = (4.0*np.pi*analysis_radius**2)/num_areas
+
         # We'll take the distances between this particle (nucleated at t=0) and the
         # one before (nucleated at t = -tau) and the one after (t = tau). Because we 
         # have a steady state solution the whole IVP solution is just shifted in time
@@ -453,7 +455,7 @@ def partial_particle_density(ivp_solution, event_index, nucleation_rate, nucleat
             return 0.0
         distance_below = analysis_radius - ivp_solution.sol(analysis_time + tau)[1]
         distance_above = ivp_solution.sol(analysis_time - tau)[1] - analysis_radius
-        partial_density = 1.0 / (0.5 * (distance_below + distance_above)) # /m^3 - see notebook!
+        partial_density = 1.0 / (analysis_area * (0.5 * (distance_below + distance_above))) # /m^3 - see notebook!
         if verbose:
             print("Partial density calculation at r = ", analysis_radius, "m", end=" ")
             print("At time t = ", analysis_time, "s, and tau = ", tau, "s", end=" ")
@@ -471,7 +473,8 @@ def partial_particle_density(ivp_solution, event_index, nucleation_rate, nucleat
 
 # Total particle density and solid volume fraction calculation
 def evaluate_partcle_densities(solutions, analysis_depths, integration_depths, nucleation_rates, 
-                               radius_inner_core, radius_top_flayer, verbose=True):
+                               radius_inner_core, radius_top_flayer, num_areas=1000000000,
+                               verbose=True):
     # FIXME: other parameters should be arguments
     if verbose:
         print("ODE solved for all nuclation depths... calculating integrals over nuclation depth for particle density")
@@ -494,7 +497,7 @@ def evaluate_partcle_densities(solutions, analysis_depths, integration_depths, n
                 next
                 
             nuc_rate = nucleation_rates[j]
-            nuc_area = 1000.0*1000.0
+            nuc_area = (4.0*np.pi*int_r**2)/num_areas
             if j == 0:
                 # Innermost layer
                 top = integration_depths[j] + (0.5 * (integration_depths[j+1] - integration_depths[j]))
@@ -518,7 +521,7 @@ def evaluate_partcle_densities(solutions, analysis_depths, integration_depths, n
                 partial_densities[j] = 0.0
             else:
                 partial_densities[j] = partial_particle_density(solutions[j], analysis_index, 
-                                                            nuc_rate, nuc_vol, verbose=False)
+                                                            nuc_rate, nuc_vol, num_areas, verbose=False)
             
             # Put radius at this radius and nuc radius in radius histogram
             if solutions[j] is None:
@@ -528,7 +531,7 @@ def evaluate_partcle_densities(solutions, analysis_depths, integration_depths, n
             elif solutions[j].t_events[analysis_index].size > 0:
                 # Triggered event - no check for double crossing as partial_particle_density will have done this
                 particle_radius_unnormalised[i,j] = solutions[j].y_events[analysis_index][0][0]
-                partial_particle_densities[i,j] = ( partial_densities[j] * nuc_height )/ nuc_area
+                partial_particle_densities[i,j] = partial_densities[j]
                 partial_radius[j] = particle_radius_unnormalised[i,j]
             else:
                 # Melted etc
@@ -537,7 +540,7 @@ def evaluate_partcle_densities(solutions, analysis_depths, integration_depths, n
                 partial_radius[j] = 0.0
             
         # Number density of particles at this radius
-        particle_density = np.trapz(partial_densities, integration_depths) / nuc_area # See units note...
+        particle_density = np.trapz(partial_densities, integration_depths)
         if verbose:
             print("\nTotal particle density at r = ", analysis_r, "is", particle_density, "particles per m^3")
         particle_densities[i] = particle_density
@@ -545,6 +548,7 @@ def evaluate_partcle_densities(solutions, analysis_depths, integration_depths, n
         # Solid volume fraction of particles at this radius - this is partial number density multiplied
         # by particle volume integrated over nucleation height. While we are here also build a grain size
         # distribution histogramme at each radius
+        ## IS THIS CORRECT - CHECK PAPER.
         solid_vf[i] = np.trapz(4/3*np.pi*partial_radius**3 * (partial_densities / nuc_area), integration_depths)
         if verbose:
             print("Solid volume fraction at r = ", analysis_r, " is ", solid_vf[i])
