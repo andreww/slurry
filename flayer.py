@@ -420,6 +420,11 @@ def partial_particle_density(ivp_solution, event_index, nucleation_rate, nucleat
     represented by the start of the IVP. This must be integrated to find the total density.
     (See notes in the notebook re. statistical meaning of this given CNT!)
     """
+    if ivp_solution is None:
+        if verbose:
+            print("No ivp solution - particle not formed")
+        return 0.0
+    
     # Calculate the average time between nucleation events, this is the 'waiting time'
     # of Davies et al. 2019 and includes a factor of 1/2 to account for half of the 
     # particles reaching r_c then dissolving.
@@ -455,11 +460,13 @@ def partial_particle_density(ivp_solution, event_index, nucleation_rate, nucleat
             return 0.0
         distance_below = analysis_radius - ivp_solution.sol(analysis_time + tau)[1]
         distance_above = ivp_solution.sol(analysis_time - tau)[1] - analysis_radius
-        partial_density = 1.0 / (analysis_area * (0.5 * (distance_below + distance_above))) # /m^3 - see notebook!
+        s_v = (0.5 * (distance_below + distance_above))
+        partial_density = 1/(analysis_area * s_v) # /m^3 - see notebook!
         if verbose:
-            print("Partial density calculation at r = ", analysis_radius, "m", end=" ")
-            print("At time t = ", analysis_time, "s, and tau = ", tau, "s", end=" ")
-            print("Previous particle is", distance_below, "m below, next particle is", distance_above, "m above", end=" ")
+            print("Nucleation rate = ", nucleation_rate, "nuc_vol = ", nucleation_volume)
+            print("At time t = ", analysis_time, "s, and tau = ", tau, "s")
+            print("Previous particle is", distance_below, "m below, next particle is", distance_above, "m above")
+            print("s_v = ", s_v, "s_h = ", np.sqrt(analysis_area), "m")  
             print("Partial particle densituy is", partial_density, "particles / m^3")     
     else:
         # No particles at this depth (above nucleation depth or dissolved)
@@ -516,12 +523,9 @@ def evaluate_partcle_densities(solutions, analysis_depths, integration_depths, n
             nuc_height = top - bot
             nuc_vol = nuc_area * nuc_height
             if verbose:
-                print("\nPartial density calc for r =", analysis_r, "with nuc at r =", int_r, "nuc_rate = ", nuc_rate, "nuc_vol = ", nuc_vol)
-            if solutions[j] is None:
-                partial_densities[j] = 0.0
-            else:
-                partial_densities[j] = partial_particle_density(solutions[j], analysis_index, 
-                                                            nuc_rate, nuc_vol, num_areas, verbose=False)
+                print("\nPartial density calc for r =", analysis_r, "with nuc at r =", int_r)
+            partial_densities[j] = partial_particle_density(solutions[j], analysis_index, 
+                                                            nuc_rate, nuc_vol, num_areas, verbose=verbose)
             
             # Put radius at this radius and nuc radius in radius histogram
             if solutions[j] is None:
@@ -549,7 +553,7 @@ def evaluate_partcle_densities(solutions, analysis_depths, integration_depths, n
         # by particle volume integrated over nucleation height. While we are here also build a grain size
         # distribution histogramme at each radius
         ## IS THIS CORRECT - CHECK PAPER.
-        solid_vf[i] = np.trapz(4/3*np.pi*partial_radius**3 * (partial_densities / nuc_area), integration_depths)
+        solid_vf[i] = np.trapz(4/3*np.pi*partial_radius**3 * partial_densities, integration_depths)
         if verbose:
             print("Solid volume fraction at r = ", analysis_r, " is ", solid_vf[i])
         
