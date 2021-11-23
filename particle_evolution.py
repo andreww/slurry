@@ -2,6 +2,7 @@ import numpy as np
 import numba
 import scipy.integrate as spi
 import scipy.optimize as spo
+import matplotlib.pyplot as plt
 
 import growth
 import falling
@@ -79,6 +80,134 @@ def falling_growing_particle_solution(start_time, max_time, initial_particle_siz
     assert sol.status == 1, "Out of time, did not hit ICB"
     
     return sol
+
+
+def plot_particle_evolution_time(sol, xl, t, p, dl, k0, g, mu, 
+                                 include_solution_points=False):
+
+    # Interpolate solution (using 5th order polynomial interpolation)
+    times = np.linspace(sol.sol.ts[0], sol.sol.ts[-1], 500)
+    
+    rps = sol.sol(times)[0]
+    lps = sol.sol(times)[1]
+    
+    # second order finite difference to find growth rate at these times
+    v_growth = np.gradient(rps, times)
+    v_falling = np.gradient(lps, times)
+    
+    initial_position = sol.y[1][0]
+    initial_radius = sol.y[0][0]
+    
+    # Make arrays of input parameters (or optimised liquid composition)
+    # for each point where we have time, depth and radius of particle
+    if callable(xl):
+        xl = xl(lps)
+    else:
+        xl = np.ones_like(lps) * xl
+        
+    if callable(t):
+        temperature = t(lps)
+    else:
+        temperature = np.ones_like(lps) * t
+        
+    if callable(p):
+        pressure = p(lps) 
+    else:
+        pressure = np.ones_like(lps) * p
+        
+    if callable(g):
+        gravity = g(lps)
+    else:
+        gravity = np.ones_like(lps) * g   
+    
+    
+    rho_liq, _, _, rho_hcp, _, _ = feo_thermodynamics.densities(xl, pressure, temperature)
+    delta_rho = rho_hcp - rho_liq
+    
+    # Should be able to solve for this without optimisation as I know falling velocity...
+    # but this needs inverse of drag coeffcient calculation to get re I think.
+    falling_velocity, drag_coefficient, re, pe_t, pe_c, fr, delta_u, delta_t, delta_c = \
+        falling.zhang_particle_dynamics(rps, mu, gravity, 
+                            delta_rho, rho_liq, 100.0, dl)
+    
+    # Should also be able to get xp from boundary layer analysis without optimisation,
+    # but need to look at equations
+    xp = np.zeros_like(xl)
+    growth_velocity = np.zeros_like(xl)
+    for i, (xl_i, delta_c_i, temperature_i, pressure_i) in enumerate(zip(xl, delta_c, temperature, pressure)):
+        xp[i], root_result = spo.brentq(_optimise_boundary_composition, 1.0E-16, 1.0-1.0E-16, 
+                                 args=(xl_i, delta_c_i, temperature_i, pressure_i, dl, k0),
+                                 xtol=2.0e-13, disp=False, full_output=True)
+        growth_velocity[i] = growth.growth_velocity_feo(xp[i], pressure_i, temperature_i, k0)
+
+        
+    
+    times = times / (60*60*24) # Days seems like a generaly sensible unit for us.
+
+    # Plot
+    fig, axs = plt.subplots(nrows=4, ncols=2, figsize=(12,8), sharex='col')
+    fig.subplots_adjust(hspace=0, wspace=0.1)
+    
+    ax = axs[0,0]
+    ax.plot(times, lps/1000)
+    if include_solution_points:
+        ax.plot(sol.t/ (60*60*24), sol.y[1]/1000, 'bo')
+    ax.set_ylabel('Particle position (km)')
+    
+    ax = axs[0,1]
+    ax.plot(times, -1*v_falling)
+    ax.set_ylabel('Particle velocity (m/s)')
+    ax.yaxis.set_ticks_position('right')
+    ax.yaxis.set_label_position("right")
+    
+    ax = axs[1,0]
+    ax.plot(times, rps)
+    if include_solution_points:
+        ax.plot(sol.t/ (60*60*24), sol.y[0], 'bo')
+    ax.set_ylabel('particle radius (m)')
+    
+    ax = axs[1,1]
+    ax.plot(times[1:], v_growth[1:])
+    ax.set_ylabel('Growth velocity (m/s)')
+    ax.yaxis.set_major_formatter(_sciformat)
+    ax.yaxis.set_ticks_position('right')
+    ax.yaxis.set_label_position("right")
+
+
+    ax = axs[2,0]
+    ax.plot(times[1:], re[1:], label="Re")
+    ax.plot(times[1:], pe_c[1:], label="Pe_c")
+    ax.plot(times[1:], fr[1:], label="Fr")
+    ax.set_yscale("log")
+    ax.set_ylabel('Re, Fr, Pe_c (-)')
+    ax.legend()
+       
+    ax = axs[2,1]
+    ax.plot(times, delta_c/rps)
+    ax.set_ylabel('Scaled BL thickness (-)')
+    ax.set_yscale("log")
+    ax.yaxis.set_ticks_position('right')
+    ax.yaxis.set_label_position("right")
+
+    ax = axs[3,0]
+    ax.plot(times, delta_c)
+    ax.set_ylabel('Physical BL thickness (m)')
+    ax.set_xlabel('Time (days)')
+
+    
+    ax = axs[3,1]
+    ax.plot(times, xp, label="at boundary")
+    ax.plot(times, xl, label="in bulk")
+    ax.set_ylabel('Composition \n (mol frac Fe)')
+    ax.yaxis.set_ticks_position('right')
+    ax.yaxis.set_label_position("right")
+    ax.legend()
+    
+
+    ax.set_xlabel('Time (days)')
+
+    plt.show()
+
 
 
 # ODE function
@@ -216,3 +345,11 @@ def _make_event(r_event):
         height = z - r_event
         return height
     return event_func
+
+def _sciformat(x, pos=None):
+    if x == 0:
+        return "0.0"
+    scistr = "{:E}".format(x)
+    vals = scistr.split('E')
+    fmttick = "${:.1f}".format(float(vals[0])) + r"\times 10^{" + "{}".format(int(vals[1])) + "}$"
+    return fmttick
