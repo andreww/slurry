@@ -104,12 +104,12 @@ def flayer_case(f_layer_thickness, delta_t_icb, xfe_outer_core, xfe_icb,
     # Post-solution analysis
     calculated_seperation, growth_rate = analyse_flayer(solutions, nucleation_radii, analysis_radii, nucleation_rates, r_icb,
                    particle_densities, growth_rate, solid_vf, \
-                   particle_radius_unnormalised, partial_particle_densities, verbose=True)
+                   particle_radius_unnormalised, partial_particle_densities, verbose=False)
     
     opt_xl = opt_xlfunc(analysis_radii)
     
     return solutions, analysis_radii, particle_densities, calculated_seperation, solid_vf, \
-        particle_radius_unnormalised, partial_particle_densities, growth_rate, opt_xl
+        particle_radius_unnormalised, partial_particle_densities, growth_rate, opt_xl, crit_nuc_radii, nucleation_rates
 
 
 def setup_flayer_functions(r_icb, r_cmb, f_layer_thickness, gruneisen_parameter, delta_t_icb, xfe_outer_core, xfe_icb, **kwargs):
@@ -286,7 +286,8 @@ def evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
     for i, r in enumerate(analysis_radii):
         crit_nuc_radii[i], nucleation_rates[i] = nucleation.calc_nucleation(
             float(xl_func(r)), float(pfunc(r)), float(tfunc(r)), surf_energy, i0)
-        print("R =", r, "I = ", nucleation_rates[i], "r0 = ", crit_nuc_radii[i])
+        if verbose:
+            print("R =", r, "I = ", nucleation_rates[i], "r0 = ", crit_nuc_radii[i])
     
     # Calculate an initial guess using the provided liquid compositioon (TODO: pass in xl)
     solutions, particle_densities, growth_rate, solid_vf, \
@@ -583,7 +584,7 @@ def evaluate_particle_seperation(particle_densities, analysis_depths, verbose=Tr
 # Just calculate the core growth rate.
 def evaluate_core_growth_rate(solutions, integration_depths, nucleation_rates, radius_inner_core, verbose=True):
     if verbose:
-        print("\nODE solved for all nuclation depths... calculating integrals over nuclation depth for inner core growth")
+        print("\nODE solved for all nuclation  depths... calculating integrals over nuclation depth for inner core growth")
     
     # IC growth rate should be okay
     # We build up an array of solid volume as a function
@@ -633,7 +634,8 @@ def integrate_snow_zone(analysis_depths, radius_inner_core, radius_top_flayer, i
     solutions = []
     for i, int_depth in enumerate(integration_depths):
         if (nucleation_rates[i] < 1.0E-60) or (np.isnan(nucleation_rates[i])):
-            print("Skipping this solution as no crystals form")
+            if verbose:
+                print("Skipping this solution as no crystals form")
             sol = None
             
         else:
@@ -653,7 +655,7 @@ def integrate_snow_zone(analysis_depths, radius_inner_core, radius_top_flayer, i
                                         analysis_depths, integration_depths, nucleation_rates, radius_inner_core, 
                                                                                              radius_top_flayer, verbose=verbose)
     
-    growth_rate = evaluate_core_growth_rate(solutions, integration_depths, nucleation_rates, radius_inner_core)
+    growth_rate = evaluate_core_growth_rate(solutions, integration_depths, nucleation_rates, radius_inner_core, verbose=verbose)
     
     return solutions, particle_densities, growth_rate, solid_vf, particle_radius_unnormalised, partial_particle_densities
     
