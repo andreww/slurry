@@ -102,14 +102,17 @@ def flayer_case(f_layer_thickness, delta_t_icb, xfe_outer_core, xfe_icb,
                                                                                  verbose=False)
     
     # Post-solution analysis
-    calculated_seperation, growth_rate = analyse_flayer(solutions, nucleation_radii, analysis_radii, nucleation_rates, r_icb,
-                   particle_densities, growth_rate, solid_vf, \
-                   particle_radius_unnormalised, partial_particle_densities, verbose=False)
+    calculated_seperation, growth_rate, vf_ratio = analyse_flayer(solutions, 
+                   nucleation_radii, analysis_radii, nucleation_rates, r_icb,
+                   particle_densities, growth_rate, solid_vf,
+                   particle_radius_unnormalised, partial_particle_densities, tfunc, xfunc, 
+                   pfunc, verbose=False)
     
     opt_xl = opt_xlfunc(analysis_radii)
     
     return solutions, analysis_radii, particle_densities, calculated_seperation, solid_vf, \
-        particle_radius_unnormalised, partial_particle_densities, growth_rate, opt_xl, crit_nuc_radii, nucleation_rates
+        particle_radius_unnormalised, partial_particle_densities, growth_rate, opt_xl, crit_nuc_radii, nucleation_rates, \
+        vf_ratio
 
 
 def setup_flayer_functions(r_icb, r_cmb, f_layer_thickness, gruneisen_parameter, delta_t_icb, xfe_outer_core, xfe_icb, **kwargs):
@@ -355,8 +358,9 @@ def evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
 
 
 def analyse_flayer(solutions, integration_radii, analysis_radii, nucleation_rates, radius_inner_core,
-                   particle_densities, growth_rate, solid_vf, \
-                   particle_radius_unnormalised, partial_particle_densities, verbose=True):
+                   particle_densities, growth_rate, solid_vf,
+                   particle_radius_unnormalised, partial_particle_densities, tfunc, xfunc, 
+                   pfunc, verbose=True):
     """
     Perform post-processing analysis of solution
     
@@ -371,7 +375,13 @@ def analyse_flayer(solutions, integration_radii, analysis_radii, nucleation_rate
     growth_rate = evaluate_core_growth_rate(solutions, integration_radii, nucleation_rates, 
                                             radius_inner_core, verbose=verbose)
     
-    return calculated_seperation, growth_rate
+    
+    # solid volume fraction ratio (calculated / equilibrium)
+    vf_ratio =  solid_vf / feot.volume_fraction_solid(xfunc(analysis_radii), 
+                                                      pfunc(analysis_radii), 
+                                                      tfunc(analysis_radii))
+    
+    return calculated_seperation, growth_rate, vf_ratio
     
     
 def report_all_solution_events(sol, analysis_depths):
