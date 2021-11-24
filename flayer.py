@@ -22,12 +22,12 @@ import nucleation
 # multiprocessing (see process_cases.py).
 
 def flayer_case(f_layer_thickness, delta_t_icb, xfe_outer_core, xfe_icb,
-                initial_particle_size, growth_prefactor, chemical_diffusivity,
+                growth_prefactor, chemical_diffusivity,
                 kinematic_viscosity, i0, surf_energy, 
                 number_of_analysis_points,
                 r_icb=1221.5E3, r_cmb=3480.0E3, gruneisen_parameter=1.5,
                 start_time=0.0, max_time=1.0E12, max_rel_error=0.01,
-                max_absolute_error=0.001, inner_core_offset=1000.0):
+                max_absolute_error=0.001):
     """
     Setup, run and analyse a non-equilibrium F-layer model
     
@@ -85,7 +85,7 @@ def flayer_case(f_layer_thickness, delta_t_icb, xfe_outer_core, xfe_icb,
     # Make nterpolation functions for each input property (matching liquidus and
     # adiabat
     tfunc, tafunc, xfunc, pfunc, gfunc = setup_flayer_functions(r_icb, r_cmb,
-         r_flayer_top, gruneisen_parameter, delta_t_icb, xfe_outer_core, xfe_icb)
+         f_layer_thickness, gruneisen_parameter, delta_t_icb, xfe_outer_core, xfe_icb)
     
     # Discretisation points
     nucleation_radii = np.linspace(r_icb, r_flayer_top, number_of_analysis_points)
@@ -106,11 +106,13 @@ def flayer_case(f_layer_thickness, delta_t_icb, xfe_outer_core, xfe_icb,
                    particle_densities, growth_rate, solid_vf, \
                    particle_radius_unnormalised, partial_particle_densities, verbose=True)
     
-    return analysis_radii, particle_densities, calculated_seperation, solid_vf, \
-        particle_radius_unnormalised, partial_particle_densities, growth_rate
+    opt_xl = opt_xlfunc(analysis_radii)
+    
+    return solutions, analysis_radii, particle_densities, calculated_seperation, solid_vf, \
+        particle_radius_unnormalised, partial_particle_densities, growth_rate, opt_xl
 
 
-def setup_flayer_functions(r_icb, r_cmb, r_flayer_top, gamma, delta_t_icb, xfe_adiabatic, xfe_icb):
+def setup_flayer_functions(r_icb, r_cmb, f_layer_thickness, gruneisen_parameter, delta_t_icb, xfe_outer_core, xfe_icb, **kwargs):
     """
     This defines the radial functions we are going to need to model the f-layer
     
@@ -138,13 +140,14 @@ def setup_flayer_functions(r_icb, r_cmb, r_flayer_top, gamma, delta_t_icb, xfe_a
     a function of radius. In the F-layer we assume linear temperature and composition
     profiles. These functions are (numpy) vectorized and take the radii in m. 
     """
+    r_flayer_top = r_icb + f_layer_thickness
     # Base P and g on PREM...
     prem = earth_model.Prem()
     
     # First find the liquidus temperature at the top of the F-layer... we know P (from PREM)
     # and X (from our input). NB: my PREM module works in km and does not like vector input.
     # This is quite slow and could be optimised by avoiding the double brentq calls!
-    tl_top_flayer = feot.find_liquidus(xfe_adiabatic, prem.pressure(r_flayer_top/1000.0))
+    tl_top_flayer = feot.find_liquidus(xfe_outer_core, prem.pressure(r_flayer_top/1000.0))
     
     # Now we need to work out the adiabatic temperature profile that intersects the liquidus 
     # at the top of the F-layer. 
@@ -156,18 +159,18 @@ def setup_flayer_functions(r_icb, r_cmb, r_flayer_top, gamma, delta_t_icb, xfe_a
         at the top of the f-layer and the liquidus temperature. We'll need to set 
         tcmb such that this is zero!
         """
-        adabat_t_top_flayer = tcmb * (rho_top_flayer/rho_cmb)**gamma
+        adabat_t_top_flayer = tcmb * (rho_top_flayer/rho_cmb)**gruneisen_parameter
         t_error = adabat_t_top_flayer - tl_top_flayer
         return t_error
     t_cmb = spo.brentq(_t_error_top_flayer, 1000, 8000)
     
     # We can now build our function to give the adiabatic temperature
     rho_icb = prem.density(r_icb/1000.0)
-    adabat_t_top_flayer = t_cmb * (rho_top_flayer/rho_cmb)**gamma
-    adabat_icb = t_cmb * (rho_icb/rho_cmb)**gamma
+    adabat_t_top_flayer = t_cmb * (rho_top_flayer/rho_cmb)**gruneisen_parameter
+    adabat_icb = t_cmb * (rho_icb/rho_cmb)**gruneisen_parameter
     @np.vectorize
     def adiabatic_temperature_function(r):
-        temp = t_cmb * (prem.density(r/1000.0)/rho_cmb)**gamma
+        temp = t_cmb * (prem.density(r/1000.0)/rho_cmb)**gruneisen_parameter
         return temp
     
     # And the function to give the 'real' temperature (including a subadiabatic layer)
@@ -184,7 +187,7 @@ def setup_flayer_functions(r_icb, r_cmb, r_flayer_top, gamma, delta_t_icb, xfe_a
         if r >= r_cmb:
             temp = t_cmb # density is odd at disconts, just fix T outside core.
         elif r > r_flayer_top:
-            temp = t_cmb * (prem.density(r/1000.0)/rho_cmb)**gamma
+            temp = t_cmb * (prem.density(r/1000.0)/rho_cmb)**gruneisen_parameter
         else: # Will give value inside inner core, but we may need that for IVP solver...
             temp = temperature_icb + (r - r_icb)*(
                 (adabat_t_top_flayer-temperature_icb)/(r_flayer_top-r_icb))
@@ -195,10 +198,10 @@ def setup_flayer_functions(r_icb, r_cmb, r_flayer_top, gamma, delta_t_icb, xfe_a
     @np.vectorize
     def composition_function(r):
         if r > r_flayer_top:
-            xfe = xfe_adiabatic
+            xfe = xfe_outer_core
         else:
             xfe = xfe_icb + (r - r_icb)*(
-                (xfe_adiabatic-xfe_icb)/(r_flayer_top-r_icb))
+                (xfe_outer_core-xfe_icb)/(r_flayer_top-r_icb))
         return xfe
     
     @np.vectorize           
