@@ -6,6 +6,7 @@ warnings.filterwarnings("ignore")
 import numpy as np
 import scipy.interpolate as spi
 import matplotlib.pyplot as plt
+import matplotlib.colors as mplc
 
 import flayer
 import particle_evolution
@@ -79,7 +80,7 @@ def plot_case_single_solution(index, data):
     
  
 def plot_case_csd_nuc(particle_radii, analysis_radii, partial_particle_densities,
-                      crit_nuc_radii, nucleation_rates, **other_data):
+                      crit_nuc_radii, nucleation_rates, logscale=False, **other_data):
 
     max_particle_radius = particle_radii[particle_radii > 0.0].max()
     min_particle_radius = particle_radii[particle_radii > 0.0].min()
@@ -115,10 +116,16 @@ def plot_case_csd_nuc(particle_radii, analysis_radii, partial_particle_densities
     fig.subplots_adjust(hspace=0, wspace=0.1)
 
     ax = axs[0,0]
-    im = ax.imshow(csd[1:,:].T, aspect='auto', interpolation='none', 
+    if logscale:
+        im = ax.imshow(csd[1:,:].T, aspect='auto', interpolation='none', 
                    cmap=plt.get_cmap('Greys'), origin='lower', 
                    extent=[analysis_radii[1]/1000.0, analysis_radii[-1]/1000.0,
-                           edges[0], edges[-1]]) #, norm=colors.LogNorm())
+                           edges[0], edges[-1]], norm=mplc.LogNorm())
+    else:
+        im = ax.imshow(csd[1:,:].T, aspect='auto', interpolation='none', 
+                   cmap=plt.get_cmap('Greys'), origin='lower', 
+                   extent=[analysis_radii[1]/1000.0, analysis_radii[-1]/1000.0,
+                           edges[0], edges[-1]])
     ax.set_ylabel('Particle radius (m)')
     ax.set_xlabel('Radius (km)')
     #ax.set_yscale('log')
