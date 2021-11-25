@@ -14,8 +14,11 @@ import feo_thermodynamics as feot
 def case_handler(case_input):
     name = case_input[0]
     parameters = case_input[1]
-    data = run_flayer_case(parameters, name+'.pickle')
-    print(f"{name}: growth rate {data['growth_rate']} km/Myrm ax vf_ratio {data['vf_ratio'].max()}")
+    try:
+        data = run_flayer_case(parameters, name+'.pickle')
+        print(f"{name}: growth rate {data['growth_rate']} km/Myrm ax vf_ratio {data['vf_ratio'].max()}")
+    except Exception as err:
+        print(f"{name} failed! Exception was {err}") 
     
     
 def run_flayer_case(input_data, filename=None):
