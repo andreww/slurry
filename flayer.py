@@ -563,6 +563,7 @@ def evaluate_partcle_densities(solutions, analysis_depths, integration_depths, n
             
         # Number density of particles at this radius
         particle_density = np.trapz(partial_densities, integration_depths)
+        #particle_density = np.sum(partial_densities)
         if verbose:
             print("\nTotal particle density at r = ", analysis_r, "is", particle_density, "particles per m^3")
         particle_densities[i] = particle_density
@@ -572,6 +573,7 @@ def evaluate_partcle_densities(solutions, analysis_depths, integration_depths, n
         # distribution histogramme at each radius
         ## IS THIS CORRECT - CHECK PAPER.
         solid_vf[i] = np.trapz(4/3*np.pi*partial_radius**3 * partial_densities, integration_depths)
+        #solid_vf[i] = np.sum(4/3*np.pi*partial_radius**3 * partial_densities)
         if verbose:
             print("Solid volume fraction at r = ", analysis_r, " is ", solid_vf[i])
         
