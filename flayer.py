@@ -27,7 +27,7 @@ def flayer_case(f_layer_thickness, delta_t_icb, xfe_outer_core, xfe_icb,
                 number_of_analysis_points,
                 r_icb=1221.5E3, r_cmb=3480.0E3, gruneisen_parameter=1.5,
                 start_time=0.0, max_time=1.0E12, max_rel_error=0.01,
-                max_absolute_error=0.001):
+                max_absolute_error=0.001, verbose=False):
     """
     Setup, run and analyse a non-equilibrium F-layer model
     
@@ -99,14 +99,14 @@ def flayer_case(f_layer_thickness, delta_t_icb, xfe_outer_core, xfe_icb,
         chemical_diffusivity, kinematic_viscosity, i0, surf_energy,
         nucleation_radii, analysis_radii, r_icb, 
         r_flayer_top, max_rel_error=max_rel_error, max_absolute_error=max_absolute_error,
-                                                                                 verbose=False)
+                                                                                 verbose=verbose)
     
     # Post-solution analysis
     calculated_seperation, growth_rate, vf_ratio = analyse_flayer(solutions, 
                    nucleation_radii, analysis_radii, nucleation_rates, r_icb,
                    particle_densities, growth_rate, solid_vf,
                    particle_radius_unnormalised, partial_particle_densities, tfunc, xfunc, 
-                   pfunc, verbose=False)
+                   pfunc, verbose=verbose)
     
     opt_xl = opt_xlfunc(analysis_radii)
     
@@ -209,10 +209,14 @@ def setup_flayer_functions(r_icb, r_cmb, f_layer_thickness, gruneisen_parameter,
     
     @np.vectorize           
     def pressure_function(r):
+        if r < 0.0:
+            r = 0.0
         return prem.pressure(r/1000.0)
     
     @np.vectorize
     def gravity_function(r):
+        if r < 0.0:
+            r = 0.0
         return prem.gravity(r/1000.0)
     
     return temperature_function, adiabatic_temperature_function, composition_function, \

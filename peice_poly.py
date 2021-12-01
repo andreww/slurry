@@ -179,6 +179,8 @@ def _evaluate_ppoly(x, coeffs, bps, break_down):
     if x == bps[-1]:
         # We use the last coefficents for the outside point
         coef = coeffs[-1,:]
+    elif x == bps[0]:
+        coef = coeffs[0,:]
     elif break_down:
         for i in range(bps.size):
             if ((x > bps[i]) and (x <= bps[i+1])):
@@ -190,7 +192,13 @@ def _evaluate_ppoly(x, coeffs, bps, break_down):
                 coef = coeffs[i,:]
                 break
         
-    assert coef is not None                         
+    if coef is None:
+        print("Failed to find coef for ppoly for x, with coeffs, bps, brak_down:")
+        print(x)
+        print(coeffs)
+        print(bps)
+        print(break_down)
+        assert False, "Failed to find coef"
                          
     # Now evaluate at x
     value = 0
