@@ -135,10 +135,7 @@ def plot_particle_evolution_time(sol, xl, t, p, dl, k0, g, mu,
     xp = np.zeros_like(xl)
     growth_velocity = np.zeros_like(xl)
     for i, (xl_i, delta_c_i, temperature_i, pressure_i) in enumerate(zip(xl, delta_c, temperature, pressure)):
-        xp[i], root_result = spo.brentq(_optimise_boundary_composition, 1.0E-16, 1.0-1.0E-16, 
-                                 args=(xl_i, delta_c_i, temperature_i, pressure_i, dl, k0),
-                                 xtol=2.0e-13, disp=False, full_output=True)
-        growth_velocity[i] = growth.growth_velocity_feo(xp[i], pressure_i, temperature_i, k0)
+        growth_velocity[i], xp[i] = growth.diffusion_growth_velocity(xl_i, delta_c_i, pressure_i, temperature_i, dl, k0)
 
         
     
@@ -273,35 +270,12 @@ def _derivatives_of_ode(t, y, xln, temperaturein, pressurein, dl,
     # Particle growth rate. This needs a self consistent solution as it depends on the composition
     # at the interface, which depends on the growth rate and boundary layer thickness. We optimise for
     # the composition at the inside of the boundary laer
-    xp, root_result = spo.brentq(_optimise_boundary_composition, 1.0E-16, 1.0-1.0E-16, 
-                                 args=(xl, delta, temperature, pressure, dl, k0),
-                                 xtol=2.0e-13, disp=True, full_output=True)
-    # and use this to calculate the growth velocity
-    v = growth.growth_velocity_feo(xp, pressure, temperature, k0)
+    v, xp = growth.diffusion_growth_velocity(xl, delta, pressure, temperature, dl, k0)
     
     return [v, v_falling]
 
 
-# Optimisation functions
-def _optimise_boundary_composition(xp, xl, delta, temperature, pressure, dl, k0):
-    """
-    For a given xp compute the difference between the composition at the edge of
-    the boundary layer and the composition of the liquid. When this is zero we 
-    have a consistent solution (i.e. the boundary layer has a gradient suggested
-    by the growth rate and a composition at the boundary that matches the bulk
-    liquid composition
-    """
-    # Compute growth rate for this composition 
-    v = growth.growth_velocity_feo(xp, pressure, temperature, k0)
-    
-    # This gives us the composition at the edge of the boundary layer
-    # because the gradient at the boundary (and hence in the layer)
-    # is set by the expulsion rate of O from the growing Fe
-    xl_calc = xp + (delta*xp)/dl * v 
-    
-    # Return the difference between the calculated and intended composition
-    error = xl_calc - xl
-    return error
+
 
 
 # IVP event handling

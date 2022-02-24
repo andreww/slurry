@@ -1,4 +1,5 @@
 import numpy as np
+import scipy.optimize as spo
 import feo_thermodynamics
 
 """
@@ -82,4 +83,55 @@ def growth_velocity_feo(x, p, t, k0):
     mu_fe_liquid = feo_thermodynamics.fe_liquid_chemical_potential(x, p, t)
     v = growth_velocity_sun( (mu_fe_liquid - mu_fe_solid)/feo_thermodynamics.avogadro, k0, t)
     return v
+
+
+def diffusion_growth_velocity(xl, delta, pressure, temperature, dl, k0):
+    """
+    Solve for growth rate given liquid compositon outside boundary layer and boundary
+    layer thickness.
     
+    Input:
+    xl - liquid composition (mol frac Fe)
+    delta - boundary layer thickness (m) 
+    temperature - temperature (K)
+    pressure - pressure (GPa)
+    dl - diffusion coeffcent of O in Fe
+    k0 - growth pre-factor (m/s)
+    
+    Returns:
+    v - growth velocity (m/s)
+    xp - composition at interface (mol frac Fe)
+    
+    """
+
+    # Particle growth rate. This needs a self consistent solution as it depends on the composition
+    # at the interface, which depends on the growth rate and boundary layer thickness. We optimise for
+    # the composition at the inside of the boundary laer
+    xp, root_result = spo.brentq(_optimise_boundary_composition, 1.0E-16, 1.0-1.0E-16, 
+                                 args=(xl, delta, temperature, pressure, dl, k0),
+                                 xtol=2.0e-13, disp=True, full_output=True)
+    # and use this to calculate the growth velocity
+    v = growth_velocity_feo(xp, pressure, temperature, k0)
+    
+    return v, xp
+
+
+def _optimise_boundary_composition(xp, xl, delta, temperature, pressure, dl, k0):
+    """
+    For a given xp compute the difference between the composition at the edge of
+    the boundary layer and the composition of the liquid. When this is zero we 
+    have a consistent solution (i.e. the boundary layer has a gradient suggested
+    by the growth rate and a composition at the boundary that matches the bulk
+    liquid composition
+    """
+    # Compute growth rate for this composition 
+    v = growth_velocity_feo(xp, pressure, temperature, k0)
+    
+    # This gives us the composition at the edge of the boundary layer
+    # because the gradient at the boundary (and hence in the layer)
+    # is set by the expulsion rate of O from the growing Fe
+    xl_calc = xp + (delta*xp)/dl * v 
+    
+    # Return the difference between the calculated and intended composition
+    error = xl_calc - xl
+    return error
