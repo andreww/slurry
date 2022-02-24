@@ -24,7 +24,7 @@ describing the model:
 * **[falling.ipynb](./falling.ipynb)**: details of the calculation of the falling velocity of the particle and boundary layer analysis. Code to generate Figure 2.
 * **falling.py**: python module implementing the self-consistent calculation of falling velocity and Re, and the calculation of boundary layer thickness.
 * **new_growth.ipynb** and **growth_with_boundary_layer.ipynb**: Growth rate calculation. Needs significant cleanup. Figure 3
-* **particle_evolution.ipynb**: single particle calcuation. Needs significant cleanup. Figure 4.
+* **particle_evolution.ipynb**: single particle calculation. Needs significant cleanup. Figure 4.
 * **new_nucleation.ipynb**: needs cleanup. Needs to make new figure for paper. remove restricted volume stuff.
 * **PREM**
 * **F-layer solution**
