@@ -110,6 +110,7 @@ def diffusion_growth_velocity(xl, delta, pressure, temperature, dl, k0):
     xp, root_result = spo.brentq(_optimise_boundary_composition, 1.0E-16, 1.0-1.0E-16, 
                                  args=(xl, delta, temperature, pressure, dl, k0),
                                  xtol=2.0e-13, disp=True, full_output=True)
+    assert root_result.converged, "Failed to converge in diffusion_growth_velocity"
     # and use this to calculate the growth velocity
     v = growth_velocity_feo(xp, pressure, temperature, k0)
     
