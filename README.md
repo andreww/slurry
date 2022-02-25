@@ -23,7 +23,8 @@ describing the model:
 * **thermodynamic_model.py** and **feo_thermodynamics.py**: python modules implementing the model of Komabayashi 2014.
 * **[falling.ipynb](./falling.ipynb)**: details of the calculation of the falling velocity of the particle and boundary layer analysis. Code to generate Figure 2.
 * **falling.py**: python module implementing the self-consistent calculation of falling velocity and Re, and the calculation of boundary layer thickness.
-* **new_growth.ipynb** and **growth_with_boundary_layer.ipynb**: Growth rate calculation. Needs significant cleanup. Figure 3
+* **[growth.ipynb](./growth.ipynb)**: Growth rate calculation with and without a boundary layer. Code to generate Figure 3.
+* **growth.py**: python module implementing the growth calculation.
 * **particle_evolution.ipynb**: single particle calculation. Needs significant cleanup. Figure 4.
 * **new_nucleation.ipynb**: needs cleanup. Needs to make new figure for paper. remove restricted volume stuff.
 * **PREM**
