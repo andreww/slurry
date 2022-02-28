@@ -141,7 +141,7 @@ def boundary_layers(radius, re, pe_c, pe_t, sc, pr, fr):
     * delta_t: thickness of thermal boundary layer (m)
     * delta_c: thickness of chemical boundary layer (m)
     """
-    if fr >= 10.0:
+    if fr >= -1.0E16: # For now... probably need to work out why Fr goes negative...
         if re < 1.0e-2:
             delta_u = 2.0 * radius
             delta_c = 2.0 * radius
