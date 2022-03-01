@@ -136,7 +136,7 @@ def interpolate_particle_evolution(sol, xl, t, p, dl, k0, g, mu):
     for i, (xl_i, delta_c_i, temperature_i, pressure_i) in enumerate(zip(xl, delta_c, temperature, pressure)):
         growth_velocity[i], xp[i] = growth.diffusion_growth_velocity(xl_i, delta_c_i, pressure_i, temperature_i, dl, k0)
         
-    return times, rps, v_growth, lps, v_falling, re, pe_c, fr, delta_c, xp
+    return times, rps, v_growth, lps, v_falling, re, pe_c, fr, delta_c, xl, xp
 
         
         
@@ -144,7 +144,7 @@ def plot_particle_evolution_time(sol, xl, t, p, dl, k0, g, mu,
                                  include_solution_points=False):
     
     times, rps, v_growth, lps, v_falling, re, pe_c, fr, \
-        delta_c, xp = interpolate_particle_evolution(sol, xl, t, p, dl, k0, g, mu)
+        delta_c, xl, xp = interpolate_particle_evolution(sol, xl, t, p, dl, k0, g, mu)
     
     times = times / (60*60*24) # Days seems like a generaly sensible unit for us.
 
