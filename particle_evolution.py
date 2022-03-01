@@ -82,10 +82,10 @@ def falling_growing_particle_solution(start_time, max_time, initial_particle_siz
     return sol
 
 
-def interpolate_particle_evolution(sol, xl, t, p, dl, k0, g, mu):
+def interpolate_particle_evolution(sol, xl, t, p, dl, k0, g, mu, numpoints=500):
 
     # Interpolate solution (using 5th order polynomial interpolation)
-    times = np.linspace(sol.sol.ts[0], sol.sol.ts[-1], 500)
+    times = np.linspace(sol.sol.ts[0], sol.sol.ts[-1], numpoints)
     
     rps = sol.sol(times)[0]
     lps = sol.sol(times)[1]
