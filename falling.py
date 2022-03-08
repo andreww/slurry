@@ -141,7 +141,7 @@ def boundary_layers(radius, re, pe_c, pe_t, sc, pr, fr):
     * delta_t: thickness of thermal boundary layer (m)
     * delta_c: thickness of chemical boundary layer (m)
     """
-    if fr >= -1.0E16: # For now... probably need to work out why Fr goes negative...
+    if fr >= 10.0:
         if re < 1.0e-2:
             delta_u = 2.0 * radius
             delta_c = 2.0 * radius
@@ -162,22 +162,17 @@ def boundary_layers(radius, re, pe_c, pe_t, sc, pr, fr):
             delta_c = delta_c_prefac * re**(-0.5) * (sc)**(-1/3) * 2.0 * radius
             
     else: # Low Fr...
-        delta_u = (fr/re)**(0.5) * 2.0 * radius
-        if delta_u > 2.0 * radius:
+        
+        if re < 1.0e-2: # Same argument as for high Fr...
             delta_u = 2.0 * radius
             delta_c = 2.0 * radius
             delta_t = 2.0 * radius
         else:
-            delta_c = fr**(1/6) / (re**(1/6) * pe_c**(1/6)) * 2.0 * radius
-            delta_t = fr**(1/6) / (re**(1/6) * pe_t**(1/6)) * 2.0 * radius
-            
-    # But if Peclet number is < 1e-2 the thermal or chemical BL is weak (Inman, first para of 
-    # section 3.2. Only matters if Pr or Sc outweigh Re.
-    if pe_c < 1.0e-2:
-        delta_c = 2.0 * radius
-    if pe_t < 1.0e-2:
-        delta_t = 2.0 * radius
-         
+            # How do I get the pre-factor? fr is a function of the falling velocity!
+            delta_u = (fr/re)**(0.5) * 2.0 * radius # Assumption in para above eq. 3.11 in Inman
+            delta_c = fr**(1/6) / (re**(1/6) * pe_c**(1/3)) * 2.0 * radius # eq. 3.12
+            delta_t = fr**(1/6) / (re**(1/6) * pe_t**(1/3)) * 2.0 * radius # Assume t works like c.
+            warnings.warn("Don't know pre-factor for in Re, low Fr")
         
     return delta_u, delta_c, delta_t
 
@@ -217,8 +212,8 @@ def dimensionless_numbers(radius, re, falling_velocity, kinematic_viscosity, che
         drho_dz = -0.0005 # density grad above ICB (kg/m^2)
         icb_g = 4.4 # gravity above ICB
         brunt_vaisala = np.sqrt(-(icb_g / rho_0) * drho_dz)
-    fr = falling_velocity / (brunt_vaisala * radius)
-    
+    fr = np.abs(falling_velocity) / (brunt_vaisala * radius)
+
     return pr, pe_t, sc, pe_c, fr
 
 
