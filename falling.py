@@ -141,7 +141,13 @@ def boundary_layers(radius, re, pe_c, pe_t, sc, pr, fr):
     * delta_t: thickness of thermal boundary layer (m)
     * delta_c: thickness of chemical boundary layer (m)
     """
-    if fr >= 10.0:
+    # FIXME: what do we do about the ow Pe regime. No BL, first para section 3.2
+    #        but in our case we can be Pe < 1E2 and Re > 1E-2 (a bit) and this means
+    #        we transition from low Pe to intermediate Re (at high Fr). Somehow we 
+    #        need a way to make a three dimensional surface peicewise contiuous. This
+    #        is not easy. We could also transition from low to high Fr. How to deal with
+    #        this?
+    if fr >= 10.0: # Mostly here - high Pe, high Fr
         if re < 1.0e-2:
             delta_u = 2.0 * radius
             delta_c = 2.0 * radius
@@ -161,18 +167,18 @@ def boundary_layers(radius, re, pe_c, pe_t, sc, pr, fr):
             delta_c_prefac = (1.0E-2*sc)**(1/3) * (1.0E2*sc)**(-1/3) * (1.0E2)**(1/2) * sc**(1/3)
             delta_c = delta_c_prefac * re**(-0.5) * (sc)**(-1/3) * 2.0 * radius
             
-    else: # Low Fr...
-        
+    else: # Low Fr... only here for small particles...
+        assert re < 1.0e2, "No scaling for low Fr, high Re"
         if re < 1.0e-2: # Same argument as for high Fr...
             delta_u = 2.0 * radius
             delta_c = 2.0 * radius
             delta_t = 2.0 * radius
         else:
-            # How do I get the pre-factor? fr is a function of the falling velocity!
-            delta_u = (fr/re)**(0.5) * 2.0 * radius # Assumption in para above eq. 3.11 in Inman
-            delta_c = fr**(1/6) / (re**(1/6) * pe_c**(1/3)) * 2.0 * radius # eq. 3.12
-            delta_t = fr**(1/6) / (re**(1/6) * pe_t**(1/3)) * 2.0 * radius # Assume t works like c.
-            warnings.warn("Don't know pre-factor for in Re, low Fr")
+            delta_u_prefac = (1.0e-2*fr)**(-0.5)
+            delta_u = delta_u_prefac * (fr/re)**(0.5) * 2.0 * radius # Assumption in para above eq. 3.11 in Inman
+            delta_c_prefac = (1.0E-2)**(-1/6) * (1.0E-2*sc)**(-1/3) / fr(1/6)
+            delta_c = delta_c_prefac * fr**(1/6) / (re**(1/6) * pe_c**(1/3)) * 2.0 * radius # eq. 3.12
+            delta_t = 2.0 * radius # Assume t works like above?
         
     return delta_u, delta_c, delta_t
 
