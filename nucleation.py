@@ -37,7 +37,7 @@ def calc_nucleation(x, p, t, gamma, i0):
     g_sl = well_mixed_gsl(x, p, t)
     rc, gc = well_mixed_nucleation(gamma, g_sl)
     i = nucleation_rate(t, i0, gc)
-    return rc, i
+    return rc, i, gc
 
 
 def well_mixed_nucleation(gamma, gsl):
@@ -53,18 +53,14 @@ def well_mixed_nucleation(gamma, gsl):
     returns critical radii (in m), free energy barrier (in J), 
     nucleation rate (s^-1 m^3), and waiting time (s m^3)
     """
-    # rc
-    rc = -2*gamma / gsl
-    #mask = rc<=0.0 # negative radius is > Tm
-    #rc[mask] = np.nan
-    
-    
-    # gc
-    gc = (16.0 * np.pi * gamma**3) / (3.0 * gsl**2) # in J?
-    #gc[mask] = np.nan
-    if rc <= 0.0:
+    if gsl >= 0.0:
+        # On the liquidus or above Tm. return np.nan, this propogates
+        # and is handled by the F-layer solver.
         rc = np.nan
         gc = np.nan
+    else:
+        rc = -2*gamma / gsl
+        gc = (16.0 * np.pi * gamma**3) / (3.0 * gsl**2) # in J?
     
     return rc, gc
 

@@ -290,11 +290,12 @@ def evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
     # Calculate nucleation rates and radii at each radius
     crit_nuc_radii = np.zeros_like(analysis_radii)
     nucleation_rates = np.zeros_like(analysis_radii)
+    crit_nuc_energy = np.zeros_like(analysis_radii)
     for i, r in enumerate(analysis_radii):
-        crit_nuc_radii[i], nucleation_rates[i] = nucleation.calc_nucleation(
+        crit_nuc_radii[i], nucleation_rates[i], crit_nuc_energy[i]  = nucleation.calc_nucleation(
             float(xl_func(r)), float(pfunc(r)), float(tfunc(r)), surf_energy, i0)
         if verbose:
-            print("R =", r, "I = ", nucleation_rates[i], "r0 = ", crit_nuc_radii[i])
+            print("R =", r, "I = ", nucleation_rates[i], "r0 = ", crit_nuc_radii[i], "gc = ", crit_nuc_energy[i])
     
     # Calculate an initial guess using the provided liquid compositioon (TODO: pass in xl)
     solutions, particle_densities, growth_rate, solid_vf, \
@@ -321,7 +322,7 @@ def evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
         
         # Recalculate nucleation rates and radii at each radius
         for i, r in enumerate(analysis_radii):
-            crit_nuc_radii[i], nucleation_rates[i] = nucleation.calc_nucleation(
+            crit_nuc_radii[i], nucleation_rates[i], crit_nuc_energy[i] = nucleation.calc_nucleation(
                 float(xl_func(r)), float(pfunc(r)), float(tfunc(r)), surf_energy, i0)
         
         # Recalculate solution with updated (TODO: xl...)
