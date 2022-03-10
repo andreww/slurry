@@ -91,7 +91,20 @@ def self_consistent_falling_velocity(radius, kinematic_viscosity, gravity, delta
     * drag_coefficient: empricial drag coefficent based on Reynolds number scaling (-)
     * re: Reynolds number (-)
     """
-    falling_velocity = scipy.optimize.brentq(_fzhang_opt, -1.0, 100.0,
+    # First check _fzhang_opt gives different signs for upper and lower bracket...
+    lower_bracket = -1.0
+    upper_bracket = 100.0
+    lower_velocity_error = _fzhang_opt(lower_bracket, radius, kinematic_viscosity, 
+                                       gravity, delta_density, fluid_density)
+    upper_velocity_error = _fzhang_opt(upper_bracket, radius, kinematic_viscosity, 
+                                       gravity, delta_density, fluid_density)
+    if (lower_velocity_error * upper_velocity_error) >= 0.0:
+        # Sign of the errors at the two brackets are the same, this will crash. give info
+        print("Problem with bracketing interval in zeros calculation for falling velocity")
+        print(f"Radius {radius} m, kinermatic viscsity {kinematic_viscosity}, gravity {gravity}, density contrast {delta_density}, fluid density {fluid_density}")
+        print(f"Lower bracket {lower_bracket} m/s gives velocity error of {lower_velocity_error} m/s")
+        print(f"Upper bracket {upper_bracket} m/s gives velocity error of {upper_velocity_error} m/s")
+    falling_velocity = scipy.optimize.brentq(_fzhang_opt, lower_bracket, upper_bracket,
                             args=(radius, kinematic_viscosity, gravity, delta_density,
                                   fluid_density))
     
