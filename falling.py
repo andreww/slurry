@@ -53,6 +53,10 @@ def zhang_particle_dynamics(radius, kinematic_viscosity, gravity,
     of ambient chemical gradients by sinking spheres. Journal of Fluid Mechanics, 892, A33.
     https://doi.org/10.1017/jfm.2020.191
     """
+    if radius > 10.0:
+        # This is silly. Let's warn and stop things blowing up for now
+        print(f"Radius {radius} m capped to 10 m in falling")
+        radius = 10.0
     # First calculate Re and the falling velocity 
     falling_velocity, re, drag_coefficient = self_consistent_falling_velocity(radius, 
                                   kinematic_viscosity, gravity, delta_density, fluid_density)
@@ -160,7 +164,7 @@ def boundary_layers(radius, re, pe_c, pe_t, sc, pr, fr):
     #        need a way to make a three dimensional surface peicewise contiuous. This
     #        is not easy. We could also transition from low to high Fr. How to deal with
     #        this?
-    if fr >= 10.0: # Mostly here - high Pe, high Fr
+    if True: # Avoid Fr for now! fr >= 10.0: # Mostly here - high Pe, high Fr
         if re < 1.0e-2:
             delta_u = 2.0 * radius
             delta_c = 2.0 * radius
@@ -180,16 +184,17 @@ def boundary_layers(radius, re, pe_c, pe_t, sc, pr, fr):
             delta_c_prefac = (1.0E-2*sc)**(1/3) * (1.0E2*sc)**(-1/3) * (1.0E2)**(1/2) * sc**(1/3)
             delta_c = delta_c_prefac * re**(-0.5) * (sc)**(-1/3) * 2.0 * radius
             
-    else: # Low Fr... only here for small particles...
-        assert re < 1.0e2, "No scaling for low Fr, high Re"
+    else: # Low Fr... only here for small particles for cases I've looked at...
         if re < 1.0e-2: # Same argument as for high Fr...
             delta_u = 2.0 * radius
             delta_c = 2.0 * radius
             delta_t = 2.0 * radius
         else:
+            if re > 1.0e2:
+                warnings.warn("No scaling for low Fr, high Re, treat boundary layer analysis with care")
             delta_u_prefac = (1.0e-2*fr)**(-0.5)
             delta_u = delta_u_prefac * (fr/re)**(0.5) * 2.0 * radius # Assumption in para above eq. 3.11 in Inman
-            delta_c_prefac = (1.0E-2)**(-1/6) * (1.0E-2*sc)**(-1/3) / fr(1/6)
+            delta_c_prefac = (1.0E-2)**(-1/6) * (1.0E-2*sc)**(-1/3) / fr**(1/6)
             delta_c = delta_c_prefac * fr**(1/6) / (re**(1/6) * pe_c**(1/3)) * 2.0 * radius # eq. 3.12
             delta_t = 2.0 * radius # Assume t works like above?
         
