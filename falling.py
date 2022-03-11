@@ -158,18 +158,17 @@ def boundary_layers(radius, re, pe_c, pe_t, sc, pr, fr):
     * delta_t: thickness of thermal boundary layer (m)
     * delta_c: thickness of chemical boundary layer (m)
     """
-    # FIXME: what do we do about the ow Pe regime. No BL, first para section 3.2
-    #        but in our case we can be Pe < 1E2 and Re > 1E-2 (a bit) and this means
-    #        we transition from low Pe to intermediate Re (at high Fr). Somehow we 
-    #        need a way to make a three dimensional surface peicewise contiuous. This
-    #        is not easy. We could also transition from low to high Fr. How to deal with
-    #        this?
-    if True: # Avoid Fr for now! fr >= 10.0: # Mostly here - high Pe, high Fr
+    if pe_c < 1E2 and re > 1E-2:
+        # Low Pe regime. No BL, (first para section 3.2). Scaling should be the same as low re
+        # bu this gives a discontiuous transition (e.g. if we transition from low Pe to intermediate 
+        # Re (at high Fr). Warn about this.
+        warnings.warn(f"Low Pe_c ({pe_c})with intermediate or high Re ({re}). Treat boundary layer results with care!")
+    if fr >= 10.0: # Mostly here - high Pe, high Fr
         if re < 1.0e-2:
             delta_u = 2.0 * radius
             delta_c = 2.0 * radius
             delta_t = 2.0 * radius
-        elif re < 1.0e2 and re >= 1.0e-2:               # Intermediate Re case
+        elif re < 1.0e2:               # Intermediate Re case
             delta_u = 2.0 * radius
             delta_t = 2.0 * radius                  # For T, apply low Re limit as Pe is low till Re~100
             # Prefactor for delta_c must match low and intermediate regimes at re=1e-2 and this is depends
@@ -189,14 +188,19 @@ def boundary_layers(radius, re, pe_c, pe_t, sc, pr, fr):
             delta_u = 2.0 * radius
             delta_c = 2.0 * radius
             delta_t = 2.0 * radius
-        else:
-            if re > 1.0e2:
-                warnings.warn("No scaling for low Fr, high Re, treat boundary layer analysis with care")
-            delta_u_prefac = (1.0e-2*fr)**(-0.5)
+        elif re < 1.0e2:
+            delta_u_prefac = (1.0e-2*fr)**(-0.5) # This gives discontiuity
             delta_u = delta_u_prefac * (fr/re)**(0.5) * 2.0 * radius # Assumption in para above eq. 3.11 in Inman
             delta_c_prefac = (1.0E-2)**(-1/6) * (1.0E-2*sc)**(-1/3) / fr**(1/6)
             delta_c = delta_c_prefac * fr**(1/6) / (re**(1/6) * pe_c**(1/3)) * 2.0 * radius # eq. 3.12
             delta_t = 2.0 * radius # Assume t works like above?
+        elif re >= 1.0e2:
+            # Chris thinks delta_c / 2r ~ Sc^1/3 Re^-1/2 Fr^1/6. (And I think he has momentum scaling on paper too)
+            delta_c_prefac = (fr**(-1/6) / (1.0E-2**(-1/6) * pe_c**(-1/3))) * sc**(-1/3) * (1.0E2)**(1/2) * fr**(-1/6)
+            delta_c = delta_c_prefac * sc**(1/3) * re**(-1/2) * fr**(1/6)
+            delta_u = 1.0E-6
+            delta_t = 1.0E-6
+            
         
     return delta_u, delta_c, delta_t
 
@@ -305,7 +309,7 @@ def find_critical_radii(kinematic_viscosity, gravity,
                             args=(kinematic_viscosity, gravity, delta_density, fluid_density, re))
         critical_re_radii.append(r_crit)
     for fr in critical_fr_values:
-        r_crit = scipy.optimize.brentq(_fr_error, 1.0E-8, 1.0E3, args=(kinematic_viscosity, gravity, 
+        r_crit = scipy.optimize.brentq(_fr_error, 1.0E-10, 1.0E3, args=(kinematic_viscosity, gravity, 
                     delta_density, fluid_density, chemical_diffusivity, thermal_diffusivity, 
                                                                        brunt_vaisala, fr))
         critical_fr_radii.append(r_crit)
