@@ -54,6 +54,7 @@ def zhang_particle_dynamics(radius, kinematic_viscosity, gravity,
     https://doi.org/10.1017/jfm.2020.191
     """
     if radius > 10.0:
+        # FIXME!!!
         # This is silly. Let's warn and stop things blowing up for now
         print(f"Radius {radius} m capped to 10 m in falling")
         radius = 10.0
@@ -69,7 +70,7 @@ def zhang_particle_dynamics(radius, kinematic_viscosity, gravity,
     pr, pe_t, sc, pe_c, fr = dimensionless_numbers(radius, re, falling_velocity, kinematic_viscosity, 
                           chemical_diffusivity, thermal_diffusivity, brunt_vaisala)    
     # Boundary layer analysis
-    delta_u, delta_c, delta_t = boundary_layers(radius, re, pe_c, pe_t, sc, pr, fr)
+    delta_u, delta_c, delta_t = boundary_layers(radius, re, pe_c, pe_t, sc, pr, fr, warn_reynolds)
     
     return falling_velocity, drag_coefficient, re, pe_t, pe_c, fr, delta_u, delta_t, delta_c
 
@@ -140,9 +141,18 @@ def stokes_falling_velocity(radius, kinematic_viscosity, gravity, delta_density,
 
 
 @np.vectorize
-def boundary_layers(radius, re, pe_c, pe_t, sc, pr, fr):
+def boundary_layers(radius, re, pe_c, pe_t, sc, pr, fr, warn_reynolds=True):
     """
     Dimensional analysis of boundary layer thicknesses for falling particle
+    
+    Intended to be used to calculate chemical BL thickness inside of IVP for
+    falling growing particle. This means transitions between regimes should be
+    smooth (or at least continuous). Contiunity is expected and imposed for variation
+    in Re by finding prefactors such that the scaling above and below the transition
+    give the same BL thickness. We do not impose contiuity accross the Fr=10 regime
+    change. It's not clear how to warn about this.
+    We issue a warning if called in low Pe regime (should be > 100, but this
+    does not matter if we are low Re where there is no real BL and we go as r*2).
     
     Input arguments:
     * radius: particle radius (m)
@@ -158,11 +168,11 @@ def boundary_layers(radius, re, pe_c, pe_t, sc, pr, fr):
     * delta_t: thickness of thermal boundary layer (m)
     * delta_c: thickness of chemical boundary layer (m)
     """
-    if pe_c < 1E2 and re > 1E-2:
+    if pe_c < 1.0E2 and re > 1.0E-2 and warn_reynolds:
         # Low Pe regime. No BL, (first para section 3.2). Scaling should be the same as low re
         # bu this gives a discontiuous transition (e.g. if we transition from low Pe to intermediate 
         # Re (at high Fr). Warn about this.
-        warnings.warn(f"Low Pe_c ({pe_c})with intermediate or high Re ({re}). Treat boundary layer results with care!")
+        warnings.warn(f"Low Pe_c ({pe_c:.2e} < 100) with intermediate or high Re ({re:.2e} > 0.01). Treat boundary layer results with care!")
     if fr >= 10.0: # Mostly here - high Pe, high Fr
         if re < 1.0e-2:
             delta_u = 2.0 * radius
@@ -189,17 +199,17 @@ def boundary_layers(radius, re, pe_c, pe_t, sc, pr, fr):
             delta_c = 2.0 * radius
             delta_t = 2.0 * radius
         elif re < 1.0e2:
-            delta_u_prefac = (1.0e-2*fr)**(-0.5) # This gives discontiuity
+            delta_u_prefac = (fr/1.0e-2)**(-0.5) 
             delta_u = delta_u_prefac * (fr/re)**(0.5) * 2.0 * radius # Assumption in para above eq. 3.11 in Inman
-            delta_c_prefac = (1.0E-2)**(-1/6) * (1.0E-2*sc)**(-1/3) / fr**(1/6)
+            delta_c_prefac = (1.0E-2)**(1/6) * (1.0E-2*sc)**(1/3) * fr**(-1/6)
             delta_c = delta_c_prefac * fr**(1/6) / (re**(1/6) * pe_c**(1/3)) * 2.0 * radius # eq. 3.12
             delta_t = 2.0 * radius # Assume t works like above?
         elif re >= 1.0e2:
             # Chris thinks delta_c / 2r ~ Sc^1/3 Re^-1/2 Fr^1/6. (And I think he has momentum scaling on paper too)
-            delta_c_prefac = (fr**(-1/6) / (1.0E-2**(-1/6) * pe_c**(-1/3))) * sc**(-1/3) * (1.0E2)**(1/2) * fr**(-1/6)
-            delta_c = delta_c_prefac * sc**(1/3) * re**(-1/2) * fr**(1/6)
-            delta_u = 1.0E-6
-            delta_t = 1.0E-6
+            delta_c_prefac = ((1.0E-2)**(1/6) * (1.0E-2*sc)**(1/3) * fr**(-1/6)) * (1.0E2)**(-1/6) * (1.0E2*sc)**(-1/3) * sc**(-1/3) * (1.0E2)**(1/2)
+            delta_c = 2.0 * radius * delta_c_prefac * sc**(1/3) * re**(-1/2) * fr**(1/6)
+            delta_u = 1.0E-6 # I think Chris has this written down somewhere
+            delta_t = 1.0E-6 # Who knows...
             
         
     return delta_u, delta_c, delta_t
