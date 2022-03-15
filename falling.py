@@ -7,7 +7,7 @@ import scipy.optimize
 @np.vectorize
 def zhang_particle_dynamics(radius, kinematic_viscosity, gravity, 
                             delta_density, fluid_density, thermal_diffusivity,
-                            chemical_diffusivity, brunt_vaisala=None, warn_reynolds=True):
+                            chemical_diffusivity, brunt_vaisala=None, warn_reynolds=True, warn_peclet=True):
     """
     Calculate falling velocity and dynamical properties of a falling sphere
     
@@ -70,7 +70,7 @@ def zhang_particle_dynamics(radius, kinematic_viscosity, gravity,
     pr, pe_t, sc, pe_c, fr = dimensionless_numbers(radius, re, falling_velocity, kinematic_viscosity, 
                           chemical_diffusivity, thermal_diffusivity, brunt_vaisala)    
     # Boundary layer analysis
-    delta_u, delta_c, delta_t = boundary_layers(radius, re, pe_c, pe_t, sc, pr, fr, warn_reynolds)
+    delta_u, delta_c, delta_t = boundary_layers(radius, re, pe_c, pe_t, sc, pr, fr, warn_peclet)
     
     return falling_velocity, drag_coefficient, re, pe_t, pe_c, fr, delta_u, delta_t, delta_c
 
@@ -141,7 +141,7 @@ def stokes_falling_velocity(radius, kinematic_viscosity, gravity, delta_density,
 
 
 @np.vectorize
-def boundary_layers(radius, re, pe_c, pe_t, sc, pr, fr, warn_reynolds=True):
+def boundary_layers(radius, re, pe_c, pe_t, sc, pr, fr, warn_peclet=True):
     """
     Dimensional analysis of boundary layer thicknesses for falling particle
     
@@ -168,7 +168,7 @@ def boundary_layers(radius, re, pe_c, pe_t, sc, pr, fr, warn_reynolds=True):
     * delta_t: thickness of thermal boundary layer (m)
     * delta_c: thickness of chemical boundary layer (m)
     """
-    if pe_c < 1.0E2 and re > 1.0E-2 and warn_reynolds:
+    if pe_c < 1.0E2 and re > 1.0E-2 and warn_peclet:
         # Low Pe regime. No BL, (first para section 3.2). Scaling should be the same as low re
         # bu this gives a discontiuous transition (e.g. if we transition from low Pe to intermediate 
         # Re (at high Fr). Warn about this.
