@@ -80,7 +80,7 @@ def plot_case_single_solution(index, data):
     
  
 def plot_case_csd_nuc(particle_radii, analysis_radii, partial_particle_densities,
-                      crit_nuc_radii, nucleation_rates, logscale=False, **other_data):
+                      crit_nuc_radii, nucleation_rates, logscale=False, nonuc=True, **other_data):
 
     max_particle_radius = particle_radii[particle_radii > 0.0].max()
     min_particle_radius = particle_radii[particle_radii > 0.0].min()
@@ -112,10 +112,16 @@ def plot_case_csd_nuc(particle_radii, analysis_radii, partial_particle_densities
         fmttick = "${:.1f}".format(float(vals[0])) + r"\times 10^{" + "{}".format(int(vals[1])) + "}$"
         return fmttick
 
-    fig, axs = plt.subplots(nrows=2, ncols=2, figsize=(12,8), sharex='col')
+    if nonuc:
+        fig, axs = plt.subplots(nrows=2, ncols=1, figsize=(12,8), sharex='col')
+    else:
+        fig, axs = plt.subplots(nrows=2, ncols=2, figsize=(12,8), sharex='col')
     fig.subplots_adjust(hspace=0, wspace=0.1)
 
-    ax = axs[0,0]
+    if nonuc:
+        ax = axs[0]
+    else:
+        ax = axs[0,0]
     if logscale:
         im = ax.imshow(csd[1:,:].T, aspect='auto', interpolation='none', 
                    cmap=plt.get_cmap('Greys'), origin='lower', 
@@ -134,29 +140,33 @@ def plot_case_csd_nuc(particle_radii, analysis_radii, partial_particle_densities
     cb.set_label('Number of particles per m$^{3}$')
     cb.ax.xaxis.set_major_formatter(_sciformat)
 
-    ax = axs[1,0]
+    if nonuc:
+        ax = axs[1]
+    else:
+        ax = axs[1,0]
     ax.plot(analysis_radii[1:-1]/1000.0, csd[1:-1,:].sum(axis=1))
 
     ax.set_xlabel('Radius (km)')
     ax.set_ylabel('Total number of particles per m$^3$')
     ax.yaxis.set_major_formatter(_sciformat)
 
-    ax = axs[0, 1]
-    ax.plot(analysis_radii[1:-1]/1000.0, nucleation_rates[1:-1])
-    ax.yaxis.set_major_formatter(_sciformat)
-    ax.set_xlabel('Radius (km)')
-    ax.set_ylabel('Nucleation rate (m$^{-3}$ s$^{-1}$)')
-    ax.yaxis.set_ticks_position('right')
-    ax.yaxis.set_label_position("right")
-    #ax.set_yscale('log')
+    if not nonuc:
+        ax = axs[0, 1]
+        ax.plot(analysis_radii[1:-1]/1000.0, nucleation_rates[1:-1])
+        ax.yaxis.set_major_formatter(_sciformat)
+        ax.set_xlabel('Radius (km)')
+        ax.set_ylabel('Nucleation rate (m$^{-3}$ s$^{-1}$)')
+        ax.yaxis.set_ticks_position('right')
+        ax.yaxis.set_label_position("right")
+        #ax.set_yscale('log')
 
-    ax = axs[1, 1]
-    ax.plot(analysis_radii[1:-1]/1000.0, crit_nuc_radii[1:-1])
-    ax.set_xlabel('Radius (km)')
-    ax.set_ylabel('Critical radius for nucleation (m)')
-    ax.set_yscale('log')
-    ax.yaxis.set_ticks_position('right')
-    ax.yaxis.set_label_position("right")
+        ax = axs[1, 1]
+        ax.plot(analysis_radii[1:-1]/1000.0, crit_nuc_radii[1:-1])
+        ax.set_xlabel('Radius (km)')
+        ax.set_ylabel('Critical radius for nucleation (m)')
+        ax.set_yscale('log')
+        ax.yaxis.set_ticks_position('right')
+        ax.yaxis.set_label_position("right")
 
     plt.show()
     
