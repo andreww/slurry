@@ -575,11 +575,10 @@ def evaluate_partcle_densities(solutions, analysis_depths, integration_depths, n
         particle_densities[i] = particle_density
         
         # Solid volume fraction of particles at this radius - this is partial number density multiplied
-        # by particle volume integrated over nucleation height. While we are here also build a grain size
-        # distribution histogramme at each radius
-        ## IS THIS CORRECT - CHECK PAPER.
-        solid_vf[i] = np.trapz(4/3*np.pi*partial_radius**3 * partial_densities, integration_depths)
-        #solid_vf[i] = np.sum(4/3*np.pi*partial_radius**3 * partial_densities)
+        # by particle volume (which gives the solid volume fraction of particles that formed at R_N),
+        # then summed over all R_Ns. No issue with layers where particles dissolved or from below our
+        # analysis radius (outer loop) as these get set to zero in both terms.
+        solid_vf[i] = np.sum(4/3*np.pi*partial_radius**3 * partial_densities)
         if verbose:
             print("Solid volume fraction at r = ", analysis_r, " is ", solid_vf[i])
         
