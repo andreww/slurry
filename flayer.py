@@ -478,6 +478,11 @@ def partial_particle_density(ivp_solution, event_index, nucleation_rate, nucleat
                 print("cannot process if previous particle has gone")
             return 0.0
         distance_below = analysis_radius - ivp_solution.sol(analysis_time + tau)[1]
+        # I assume the previous line is why we get the layer dependent CSD at course layer
+        # spacing - what happens when analysis_time + tau is beyond the end of the IVP solution?
+        # Does distance below become 0 or something nasty? Do we have a similar problem if the 
+        # line below takes us out of the top of the F-layer? (Recall that increasing the number
+        # of layers makes tau bigger, tau ~ 1/layer spacing.
         distance_above = ivp_solution.sol(analysis_time - tau)[1] - analysis_radius
         s_v = (0.5 * (distance_below + distance_above))
         partial_density = 1/(analysis_area * s_v) # /m^3 - see notebook!
