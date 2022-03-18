@@ -13,7 +13,7 @@ this gives a very small decrease in the critical radius and increase in the
 nucleation rate compared to the approximation in Davies et al. 2019.
 """
 
-def calc_nucleation(x, p, t, gamma, i0):
+def calc_nucleation(x, p, t, gamma, i0, theta=180.0):
     """
     Return the nucleation rate for liquid Fe-O using CNT and the well mixed approximation
     
@@ -28,6 +28,7 @@ def calc_nucleation(x, p, t, gamma, i0):
     t - temperature (K)
     gamma - surface energy (J m^-2)
     i0 - nucleation pre-factor (s^-1 m^-3)
+    theta - wetting angle (degrees). Default of 180 corresponds to homogenious nucleation
     
     Returns:
     rc - critical radius (m)
@@ -35,18 +36,19 @@ def calc_nucleation(x, p, t, gamma, i0):
     both are set to np.nan for cases above the liquidus
     """
     g_sl = well_mixed_gsl(x, p, t)
-    rc, gc = well_mixed_nucleation(gamma, g_sl)
+    rc, gc = well_mixed_nucleation(gamma, g_sl, theta)
     i = nucleation_rate(t, i0, gc)
     return rc, i, gc
 
 
-def well_mixed_nucleation(gamma, gsl):
+def well_mixed_nucleation(gamma, gsl, theta=180.0):
     """
     Calculate CNT parameters assuming pure phase or well mixed liquid
     
     gamma: surface energy (J m^-2)
     gsl: difference between free energy of solid and liquid (J m^-3)
     i0: pre-factor / attempt rate (s^-1 m^-3)
+    theta: wetting angle in degrees. 180 (default) corresponds to homogenious nuc
     
     if t > melting temperature, returns np.nan
     
@@ -59,8 +61,10 @@ def well_mixed_nucleation(gamma, gsl):
         rc = np.nan
         gc = np.nan
     else:
+        theta = np.radians(theta)
+        s_theta = (2.0 - 3.0*np.cos(theta) + np.cos(theta)**3) / 4.0
         rc = -2*gamma / gsl
-        gc = (16.0 * np.pi * gamma**3) / (3.0 * gsl**2) # in J?
+        gc = (4.0/3.0 * np.pi * rc**3 * gsl + 4.0 * np.pi * rc**2 * gamma) * s_theta
     
     return rc, gc
 
