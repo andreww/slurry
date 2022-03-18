@@ -169,38 +169,45 @@ def boundary_layers(radius, re, pe_c, sc, fr, warn_peclet=True):
         # bu this gives a discontiuous transition (e.g. if we transition from low Pe to intermediate 
         # Re (at high Fr). Warn about this.
         warnings.warn(f"Low Pe_c ({pe_c:.2e} < 100) with intermediate or high Re ({re:.2e} > 0.01). Treat boundary layer results with care!")
-    if fr >= 10.0: # Mostly here - high Pe, high Fr
-        if re < 1.0e-2:
-            delta_u = 2.0 * radius
-            delta_c = 2.0 * radius
-        elif re < 1.0e2:               # Intermediate Re case
-            delta_u = 2.0 * radius
-            # Prefactor for delta_c must match low and intermediate regimes at re=1e-2 and this is depends
-            # on pe_c, which is re.sc, so use sc to build prefactor
-            delta_c_prefac = (1.0E-2*sc)**(1/3)
-            delta_c = delta_c_prefac * pe_c**(-1/3) * 2.0 * radius
-        elif re >= 1.0e2:                             # High Re case
-            delta_u_prefac = 10.0 # Only depends on Re... sqrt(100)
-            delta_u = 10.0 * re**(-0.5) * 2.0 * radius
-            delta_c_prefac = (1.0E-2*sc)**(1/3) * (1.0E2*sc)**(-1/3) * (1.0E2)**(1/2) * sc**(1/3)
-            delta_c = delta_c_prefac * re**(-0.5) * (sc)**(-1/3) * 2.0 * radius
-            
-    else: # Low Fr... only here for small particles for cases I've looked at...
-        if re < 1.0e-2: # Same argument as for high Fr...
-            delta_u = 2.0 * radius
-            delta_c = 2.0 * radius
-        elif re < 1.0e2:
-            delta_u_prefac = (fr/1.0e-2)**(-0.5) 
-            delta_u = delta_u_prefac * (fr/re)**(0.5) * 2.0 * radius # Assumption in para above eq. 3.11 in Inman
-            delta_c_prefac = (1.0E-2)**(1/6) * (1.0E-2*sc)**(1/3) * fr**(-1/6)
-            delta_c = delta_c_prefac * fr**(1/6) / (re**(1/6) * pe_c**(1/3)) * 2.0 * radius # eq. 3.12
-        elif re >= 1.0e2:
-            # Chris thinks delta_c / 2r ~ Sc^1/3 Re^-1/2 Fr^1/6. (And I think he has momentum scaling on paper too)
-            delta_c_prefac = ((1.0E-2)**(1/6) * (1.0E-2*sc)**(1/3) * fr**(-1/6)) * (1.0E2)**(-1/6) * (1.0E2*sc)**(-1/3) * sc**(-1/3) * (1.0E2)**(1/2)
-            delta_c = 2.0 * radius * delta_c_prefac * sc**(1/3) * re**(-1/2) * fr**(1/6)
-            delta_u = 1.0E-6 # I think Chris has this written down somewhere
-            
         
+    # Calculate the boundary layer thickness as if we are in the low and high Fr regime,
+    # then return the appropreate one (or interpolate). But only one thickness is re < 0.01.
+    # Prefactors avoid disconts in re.
+    
+    
+    if re < 1.0e-2: # Mostly here in terms of time - low or high Pe, low or high Fr, low Re
+        delta_u = 2.0 * radius
+        delta_c = 2.0 * radius
+    else:
+        if re < 1.0e2:               # Intermediate Re case
+            delta_u_high_fr = 2.0 * radius
+            delta_c_prefac_high_fr = (1.0E-2*sc)**(1/3)
+            delta_c_high_fr = delta_c_prefac_high_fr * pe_c**(-1/3) * 2.0 * radius
+            delta_u_prefac_low_fr = (fr/1.0e-2)**(-0.5) 
+            delta_u_low_fr = delta_u_prefac_low_fr * (fr/re)**(0.5) * 2.0 * radius # above eq I3.11
+            delta_c_prefac_low_fr = (1.0E-2)**(1/6) * (1.0E-2*sc)**(1/3) * fr**(-1/6)
+            delta_c_low_fr = delta_c_prefac_low_fr * fr**(1/6) / (re**(1/6) * pe_c**(1/3)) * 2.0 * radius # eq I3.12
+        elif re >= 1.0e2:                             # High Re case
+            delta_u_high_fr = 10.0 * re**(-0.5) * 2.0 * radius # Prefac only depends on Re... sqrt(100)
+            delta_c_prefac_high_fr = (1.0E-2*sc)**(1/3) * (1.0E2*sc)**(-1/3) * (1.0E2)**(1/2) * sc**(1/3)
+            delta_c_high_fr = delta_c_prefac_high_fr * re**(-0.5) * (sc)**(-1/3) * 2.0 * radius
+            # Chris thinks delta_c / 2r ~ Sc^1/3 Re^-1/2 Fr^1/6. (And I think he has momentum scaling on paper too)
+            delta_c_prefac_low_fr = ((1.0E-2)**(1/6) * (1.0E-2*sc)**(1/3) * fr**(-1/6)
+                             ) * (1.0E2)**(-1/6) * (1.0E2*sc)**(-1/3) * sc**(-1/3) * (1.0E2)**(1/2)
+            delta_c_low_fr = 2.0 * radius * delta_c_prefac_low_fr * sc**(1/3) * re**(-1/2) * fr**(1/6)
+            # FIXME: don't have the low Fr high Re delta_u scaling...
+            delta_u_low_fr = 1.0E-6 # I think Chris has this written down somewhere
+        # Interpolate these as needed
+        if fr >= 50.0: # Mostly here in terms of distance - high Pe, high Fr, int or high Re
+            delta_c = delta_c_high_fr
+            delta_u = delta_u_high_fr
+        elif fr <= 5.0:
+            delta_c = delta_c_low_fr
+            delta_u = delta_u_low_fr
+        else:
+            # fr is close to transition (given as 10 in Inman) so interpolate
+            delta_c = np.interp(fr, [5.0, 50.0], [delta_c_low_fr, delta_c_high_fr])
+            delta_u = np.interp(fr, [5.0, 50.0], [delta_u_low_fr, delta_u_high_fr])
     return delta_u, delta_c
 
 
