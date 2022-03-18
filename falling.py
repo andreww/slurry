@@ -41,7 +41,6 @@ def zhang_particle_dynamics(radius, kinematic_viscosity, gravity,
     * pe_c: Chemical Péclet number (-)
     * fr: Froude number (-)
     * delta_u: Mechanical boundary layer thickness (m)
-    * delta_t: Thermal boundary layer thickness (m)
     * delta_c: Chemical boundary layer thickness (m)
     
     References:
@@ -70,9 +69,9 @@ def zhang_particle_dynamics(radius, kinematic_viscosity, gravity,
     pr, pe_t, sc, pe_c, fr = dimensionless_numbers(radius, re, falling_velocity, kinematic_viscosity, 
                           chemical_diffusivity, thermal_diffusivity, brunt_vaisala)    
     # Boundary layer analysis
-    delta_u, delta_c, delta_t = boundary_layers(radius, re, pe_c, pe_t, sc, pr, fr, warn_peclet)
+    delta_u, delta_c = boundary_layers(radius, re, pe_c, sc, fr, warn_peclet)
     
-    return falling_velocity, drag_coefficient, re, pe_t, pe_c, fr, delta_u, delta_t, delta_c
+    return falling_velocity, drag_coefficient, re, pe_t, pe_c, fr, delta_u, delta_c
 
 
 @np.vectorize
@@ -141,7 +140,7 @@ def stokes_falling_velocity(radius, kinematic_viscosity, gravity, delta_density,
 
 
 @np.vectorize
-def boundary_layers(radius, re, pe_c, pe_t, sc, pr, fr, warn_peclet=True):
+def boundary_layers(radius, re, pe_c, sc, fr, warn_peclet=True):
     """
     Dimensional analysis of boundary layer thicknesses for falling particle
     
@@ -157,15 +156,12 @@ def boundary_layers(radius, re, pe_c, pe_t, sc, pr, fr, warn_peclet=True):
     Input arguments:
     * radius: particle radius (m)
     * re: Reynolds number, input as it has to be self consistently calculated (-)
-    * pr: Prandtl number
     * sc: Schmidt number (-)
     * pe_c: Chemical Péclet number (-)
-    * pe_t: Thermal Péclet number (-)
     * fr: Froude number (-)
 
     Returns:
     * delta_u: thickness of mementum boundary layer (m)
-    * delta_t: thickness of thermal boundary layer (m)
     * delta_c: thickness of chemical boundary layer (m)
     """
     if pe_c < 1.0E2 and re > 1.0E-2 and warn_peclet:
@@ -177,10 +173,8 @@ def boundary_layers(radius, re, pe_c, pe_t, sc, pr, fr, warn_peclet=True):
         if re < 1.0e-2:
             delta_u = 2.0 * radius
             delta_c = 2.0 * radius
-            delta_t = 2.0 * radius
         elif re < 1.0e2:               # Intermediate Re case
             delta_u = 2.0 * radius
-            delta_t = 2.0 * radius                  # For T, apply low Re limit as Pe is low till Re~100
             # Prefactor for delta_c must match low and intermediate regimes at re=1e-2 and this is depends
             # on pe_c, which is re.sc, so use sc to build prefactor
             delta_c_prefac = (1.0E-2*sc)**(1/3)
@@ -188,8 +182,6 @@ def boundary_layers(radius, re, pe_c, pe_t, sc, pr, fr, warn_peclet=True):
         elif re >= 1.0e2:                             # High Re case
             delta_u_prefac = 10.0 # Only depends on Re... sqrt(100)
             delta_u = 10.0 * re**(-0.5) * 2.0 * radius
-            delta_t_prefac = 10.0 * pr**(0.5) # But this just leads to delta_u scaling. 
-            delta_t = delta_t_prefac * re**(-0.5) * (pr)**(-0.5) * 2.0 * radius
             delta_c_prefac = (1.0E-2*sc)**(1/3) * (1.0E2*sc)**(-1/3) * (1.0E2)**(1/2) * sc**(1/3)
             delta_c = delta_c_prefac * re**(-0.5) * (sc)**(-1/3) * 2.0 * radius
             
@@ -197,22 +189,19 @@ def boundary_layers(radius, re, pe_c, pe_t, sc, pr, fr, warn_peclet=True):
         if re < 1.0e-2: # Same argument as for high Fr...
             delta_u = 2.0 * radius
             delta_c = 2.0 * radius
-            delta_t = 2.0 * radius
         elif re < 1.0e2:
             delta_u_prefac = (fr/1.0e-2)**(-0.5) 
             delta_u = delta_u_prefac * (fr/re)**(0.5) * 2.0 * radius # Assumption in para above eq. 3.11 in Inman
             delta_c_prefac = (1.0E-2)**(1/6) * (1.0E-2*sc)**(1/3) * fr**(-1/6)
             delta_c = delta_c_prefac * fr**(1/6) / (re**(1/6) * pe_c**(1/3)) * 2.0 * radius # eq. 3.12
-            delta_t = 2.0 * radius # Assume t works like above?
         elif re >= 1.0e2:
             # Chris thinks delta_c / 2r ~ Sc^1/3 Re^-1/2 Fr^1/6. (And I think he has momentum scaling on paper too)
             delta_c_prefac = ((1.0E-2)**(1/6) * (1.0E-2*sc)**(1/3) * fr**(-1/6)) * (1.0E2)**(-1/6) * (1.0E2*sc)**(-1/3) * sc**(-1/3) * (1.0E2)**(1/2)
             delta_c = 2.0 * radius * delta_c_prefac * sc**(1/3) * re**(-1/2) * fr**(1/6)
             delta_u = 1.0E-6 # I think Chris has this written down somewhere
-            delta_t = 1.0E-6 # Who knows...
             
         
-    return delta_u, delta_c, delta_t
+    return delta_u, delta_c
 
 
 def dimensionless_numbers(radius, re, falling_velocity, kinematic_viscosity, chemical_diffusivity, 

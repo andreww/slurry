@@ -128,7 +128,7 @@ def interpolate_particle_evolution(sol, xl, t, p, dl, k0, g, mu, numpoints=500, 
     
     # Should be able to solve for this without optimisation as I know falling velocity...
     # but this needs inverse of drag coeffcient calculation to get re I think.
-    falling_velocity, drag_coefficient, re, pe_t, pe_c, fr, delta_u, delta_t, delta_c = \
+    falling_velocity, drag_coefficient, re, pe_t, pe_c, fr, delta_u, delta_c = \
         falling.zhang_particle_dynamics(rps, mu, gravity, 
                             delta_rho, rho_liq, 100.0, dl, warn_peclet=False)
     
@@ -273,7 +273,7 @@ def _derivatives_of_ode(t, y, xln, temperaturein, pressurein, dl,
     # depends on the Reynolds number, which depends on the velocity...
     # this also calculates the boundary layer thickness from scaling analysis.
     # we don't need all output and the thermal diffusivity is irrelevent.
-    v_falling, _, _, _, _, _, _, _, delta = falling.zhang_particle_dynamics(
+    v_falling, _, _, _, _, _, _, delta = falling.zhang_particle_dynamics(
         rp, mu, g, delta_rho, rho_liq, 1.0, dl, warn_peclet=False) 
     v_falling  = -1.0 * v_falling # V = -dr/dt
     
