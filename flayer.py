@@ -25,6 +25,7 @@ def flayer_case(f_layer_thickness, delta_t_icb, xfe_outer_core, xfe_icb,
                 growth_prefactor, chemical_diffusivity,
                 kinematic_viscosity, i0, surf_energy, 
                 number_of_analysis_points,
+                wetting_angle=180.0, hetrogeneous_radius=None,
                 r_icb=1221.5E3, r_cmb=3480.0E3, gruneisen_parameter=1.5,
                 start_time=0.0, max_time=1.0E12, max_rel_error=0.01,
                 max_absolute_error=0.001, verbose=False):
@@ -60,6 +61,8 @@ def flayer_case(f_layer_thickness, delta_t_icb, xfe_outer_core, xfe_icb,
       and other analysis (-)
     
     Optional input arguments:
+    * wetting_angle: set to < 180.0 degrees to turn on hetrogeneous nucleation
+    * hetrogeneous_radius: a fixed initial particle radius (rather than the critical radius)
     * r_icb: inner core boundary radius, default is 1221.5e3 (m)
     * r_cmb: core mantle boundary radius, default is 3480.0e3 (m)
     * gruneisen_parameter: Grüneisen parameter for outer core adiabat 
@@ -97,6 +100,7 @@ def flayer_case(f_layer_thickness, delta_t_icb, xfe_outer_core, xfe_icb,
         crit_nuc_radii, nucleation_rates = evaluate_flayer(tfunc, xfunc, 
         pfunc, gfunc, start_time, max_time, growth_prefactor, 
         chemical_diffusivity, kinematic_viscosity, i0, surf_energy,
+        wetting_angle, hetrogeneous_radius,
         nucleation_radii, analysis_radii, r_icb, 
         r_flayer_top, max_rel_error=max_rel_error, max_absolute_error=max_absolute_error,
                                                                                  verbose=verbose)
@@ -224,7 +228,8 @@ def setup_flayer_functions(r_icb, r_cmb, f_layer_thickness, gruneisen_parameter,
 
 
 def evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
-                    k0, dl, mu, i0, surf_energy, nucleation_radii, analysis_radii, radius_inner_core, 
+                    k0, dl, mu, i0, surf_energy, wetting_angle, hetrogeneous_radius,
+                    nucleation_radii, analysis_radii, radius_inner_core, 
                     radius_top_flayer, max_rel_error=1.0E-7, max_absolute_error=1.0E-10, verbose=True):
     """
     Create a self consistent solution for the F-layer assuming non-equilibrium growth and falling
@@ -293,7 +298,9 @@ def evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
     crit_nuc_energy = np.zeros_like(analysis_radii)
     for i, r in enumerate(analysis_radii):
         crit_nuc_radii[i], nucleation_rates[i], crit_nuc_energy[i]  = nucleation.calc_nucleation(
-            float(xl_func(r)), float(pfunc(r)), float(tfunc(r)), surf_energy, i0)
+            float(xl_func(r)), float(pfunc(r)), float(tfunc(r)), surf_energy, i0, theta=wetting_angle)
+        if hetrogeneous_radius is not None:
+            crit_nuc_radii[i] = hetrogeneous_radius
         if verbose:
             print("R =", r, "I = ", nucleation_rates[i], "r0 = ", crit_nuc_radii[i], "gc = ", crit_nuc_energy[i])
     
@@ -448,6 +455,7 @@ def partial_particle_density(ivp_solution, event_index, nucleation_rate, nucleat
     # of Davies et al. 2019 and includes a factor of 1/2 to account for half of the 
     # particles reaching r_c then dissolving.
     tau = 1.0/(2.0*nucleation_rate*nucleation_volume)
+    delta_t = 2.0 # Time step for FD calculation
     
     # Find the time where a particle that nucleated at t=0 reached the radius of interest
     # by searching through the IVP events. This cannot be the first (hit ICB) or second
@@ -467,23 +475,25 @@ def partial_particle_density(ivp_solution, event_index, nucleation_rate, nucleat
         # one before (nucleated at t = -tau) and the one after (t = tau). Because we 
         # have a steady state solution the whole IVP solution is just shifted in time
         # so we can do the analysis from just this solution and use the dense output
-        # to get the distance
+        # to get the distance We just need to be careful about falling off the ends of
+        # the solution. 
         assert ivp_solution.sol(analysis_time)[1] == analysis_radius, "event / interpolator missmatch"
-        if (analysis_time - tau) < 0.0:
+        if (analysis_time - tau) > 0.0:
+            distance_above = ivp_solution.sol(analysis_time - tau)[1] - analysis_radius
+        elif (analysis_time - delta_t) > 0.0:
+            distance_above = ((ivp_solution.sol(analysis_time - delta_t)[1] - analysis_radius) / delta_t) * tau
+        else:
             if verbose:
                 print("cannot process if next particle has yet to form")
             return 0.0
-        if (analysis_time + tau) > ivp_solution.t[-1]:
+        if (analysis_time + tau) < ivp_solution.t[-1]:
+            distance_below = analysis_radius - ivp_solution.sol(analysis_time + tau)[1]
+        elif (analysis_time + delta_t) < ivp_solution.t[-1]:
+            distance_below = ((analysis_radius - ivp_solution.sol(analysis_time + delta_t)[1]) / delta_t) * tau
+        else:
             if verbose:
                 print("cannot process if previous particle has gone")
             return 0.0
-        distance_below = analysis_radius - ivp_solution.sol(analysis_time + tau)[1]
-        # I assume the previous line is why we get the layer dependent CSD at course layer
-        # spacing - what happens when analysis_time + tau is beyond the end of the IVP solution?
-        # Does distance below become 0 or something nasty? Do we have a similar problem if the 
-        # line below takes us out of the top of the F-layer? (Recall that increasing the number
-        # of layers makes tau bigger, tau ~ 1/layer spacing.
-        distance_above = ivp_solution.sol(analysis_time - tau)[1] - analysis_radius
         s_v = (0.5 * (distance_below + distance_above))
         partial_density = 1/(analysis_area * s_v) # /m^3 - see notebook!
         if verbose:
@@ -654,7 +664,7 @@ def integrate_snow_zone(analysis_depths, radius_inner_core, radius_top_flayer, i
     """
     solutions = []
     for i, int_depth in enumerate(integration_depths):
-        if (nucleation_rates[i] < 1.0E-60) or (np.isnan(nucleation_rates[i])):
+        if (nucleation_rates[i] < 1.0E-120) or (np.isnan(nucleation_rates[i])):
             if verbose:
                 print("Skipping this solution as no crystals form")
             sol = None
