@@ -296,6 +296,7 @@ def evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
     crit_nuc_radii = np.zeros_like(analysis_radii)
     nucleation_rates = np.zeros_like(analysis_radii)
     crit_nuc_energy = np.zeros_like(analysis_radii)
+    print(f"Wetting angle: {wetting_angle}")
     for i, r in enumerate(analysis_radii):
         crit_nuc_radii[i], nucleation_rates[i], crit_nuc_energy[i]  = nucleation.calc_nucleation(
             float(xl_func(r)), float(pfunc(r)), float(tfunc(r)), surf_energy, i0, theta=wetting_angle)
@@ -303,6 +304,7 @@ def evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
             crit_nuc_radii[i] = hetrogeneous_radius
         if verbose:
             print("R =", r, "I = ", nucleation_rates[i], "r0 = ", crit_nuc_radii[i], "gc = ", crit_nuc_energy[i])
+        print("R =", r, "I = ", nucleation_rates[i], "r0 = ", crit_nuc_radii[i], "gc = ", crit_nuc_energy[i])
     
     # Calculate an initial guess using the provided liquid compositioon (TODO: pass in xl)
     solutions, particle_densities, growth_rate, solid_vf, \
@@ -330,7 +332,9 @@ def evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
         # Recalculate nucleation rates and radii at each radius
         for i, r in enumerate(analysis_radii):
             crit_nuc_radii[i], nucleation_rates[i], crit_nuc_energy[i] = nucleation.calc_nucleation(
-                float(xl_func(r)), float(pfunc(r)), float(tfunc(r)), surf_energy, i0)
+                float(xl_func(r)), float(pfunc(r)), float(tfunc(r)), surf_energy, i0, theta=wetting_angle)
+
+        print(f"Maximum nuc rate {np.nanmax(nucleation_rates)}")
         
         # Recalculate solution with updated (TODO: xl...)
         solutions, particle_densities, growth_rate, solid_vf, \
@@ -338,6 +342,8 @@ def evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
              analysis_radii, radius_inner_core, radius_top_flayer, 
              nucleation_radii, nucleation_rates, tfunc, xl_func, pfunc, gfunc,
              start_time, max_time, crit_nuc_radii, k0, dl, mu, verbose=verbose)
+
+        print(f"Maximim solid volume fraction {solid_vf.max()}")
         
         # Work out the updated liquid composition to maintain mass  
         # FIXME: to function
@@ -354,14 +360,10 @@ def evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
         converged = np.allclose(xl_points, new_xl_points,
                                 atol=max_absolute_error, rtol=max_rel_error)
         
-        if verbose:
-            if converged:
-                print("Iteration", steps, "maximum absolute liquid composition difference is", 
-                      np.max(np.absolute(xl_points - new_xl_points)))
-                print("Liquid composition in F-layer has converged!")
-            else:
-                print("Iteration", steps, "maximum absolute liquid composition difference is", 
-                      np.max(np.absolute(xl_points - new_xl_points)))
+        print("Iteration", steps, "maximum absolute liquid composition difference is", 
+             np.max(np.absolute(xl_points - new_xl_points)))
+        if converged:
+            print("Liquid composition in F-layer has converged!")
         
         xl_points = new_xl_points
         
