@@ -1,0 +1,14 @@
+f_layer_thickness : 200000
+delta_t_icb : 10.0
+xfe_outer_core : 0.95
+xfe_icb : 0.95
+growth_prefactor : 150.0
+i0 : 1.0e-10
+surf_energy : 1.08e-2
+wetting_angle : 180.0
+number_of_analysis_points : 200
+r_icb : 1221500
+r_cmb : 3480000
+gruneisen_parameter : 1.5
+chemical_diffusivity : 1.0e-9
+kinematic_viscosity : 1.0e-6
