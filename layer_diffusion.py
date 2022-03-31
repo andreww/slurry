@@ -134,7 +134,7 @@ def solve_layer_diffusion(radii, sources, diffusion_coefficent, value_guess, *,
         fig_axs[0].set_xlabel('$R$ (km)')
         fig_axs[0].set_ylabel('$T(R)$ (K)')
         fig_axs[1].set_xlabel('$R$ (km)')
-        fig_axs[1].set_ylabel('$\mathrm{d}T / \mathrm{d}R$ (K)')
+        fig_axs[1].set_ylabel('$\mathrm{d}T / \mathrm{d}R$ (K/m)')
         fig_axs[2].set_xlabel('$R$ (km)')
         fig_axs[2].set_ylabel('$Q(R)$ (W/m$^3$)')
         
