@@ -12,3 +12,4 @@ r_cmb : 3480000
 gruneisen_parameter : 1.5
 chemical_diffusivity : 1.0e-9
 kinematic_viscosity : 1.0e-6
+thermal_conductivity : 100.0

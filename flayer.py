@@ -22,7 +22,7 @@ import nucleation
 # multiprocessing (see process_cases.py).
 
 def flayer_case(f_layer_thickness, delta_t_icb, xfe_outer_core, xfe_icb,
-                growth_prefactor, chemical_diffusivity,
+                growth_prefactor, chemical_diffusivity, thermal_conductivity,
                 kinematic_viscosity, i0, surf_energy, 
                 number_of_analysis_points,
                 wetting_angle=180.0, hetrogeneous_radius=None,
@@ -97,9 +97,9 @@ def flayer_case(f_layer_thickness, delta_t_icb, xfe_outer_core, xfe_icb,
     # doit!
     solutions, particle_densities, growth_rate, solid_vf, \
         particle_radius_unnormalised, partial_particle_densities, opt_xlfunc, \
-        crit_nuc_radii, nucleation_rates = evaluate_flayer(tfunc, xfunc, 
+        crit_nuc_radii, nucleation_rates = solve_flayer(tfunc, xfunc, 
         pfunc, gfunc, start_time, max_time, growth_prefactor, 
-        chemical_diffusivity, kinematic_viscosity, i0, surf_energy,
+        chemical_diffusivity, thermal_conductivity, kinematic_viscosity, i0, surf_energy,
         wetting_angle, hetrogeneous_radius,
         nucleation_radii, analysis_radii, r_icb, 
         r_flayer_top, max_rel_error=max_rel_error, max_absolute_error=max_absolute_error,
@@ -227,25 +227,25 @@ def setup_flayer_functions(r_icb, r_cmb, f_layer_thickness, gruneisen_parameter,
         pressure_function, gravity_function
 
 
-def evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
-                    k0, dl, mu, i0, surf_energy, wetting_angle, hetrogeneous_radius,
-                    nucleation_radii, analysis_radii, radius_inner_core, 
-                    radius_top_flayer, max_rel_error=1.0E-7, max_absolute_error=1.0E-10, verbose=True):
+def solve_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
+                k0, dl, k, mu, i0, surf_energy, wetting_angle, hetrogeneous_radius,
+                nucleation_radii, analysis_radii, radius_inner_core, 
+                radius_top_flayer, max_rel_error=1.0E-7, max_absolute_error=1.0E-10,
+                verbose=False, silent=False):
     """
     Create a self consistent solution for the F-layer assuming non-equilibrium growth and falling
     of iron crystals
     
     This involves integration of the results from falling-growing crystal calculations with the
-    integration being with respect to the nucleation radius. We thus need to perform the calculations
-    at a set of (provided) nucleation radii for the integration. Each of thse is assoceated with 
-    a nucleation rate. We calculate the density of falling particles (and thus their seperation)
-    at a number of analysis radii. We then calculate the total solid volume at a given radius and thus 
-    the oxygen content of the liquid. This is updated and a self-conssitent solution found
+    integration being with respect to the nucleation radius. This function acts as a wrapper and
+    driver for evaluate_flayer, which solves the nucleation, particle falling, and flux balance
+    problems for a given temperarture and liquid composition profile. evaluate_flayer is called
+    repeatedly with updated profiles until convergence.
     
     Input arguments:
     
-    tfunc: function returing temperature in K as a function of radius in m (callable), or scalar (K)
-    xfunc: function returing total composition in mol. frac Fe as a function of radius in m 
+    tfunc: function returing initial temperature in K as a function of radius in m (callable), or scalar (K)
+    xfunc: function returing initial liquid composition in mol. frac Fe as a function of radius in m 
            (callable), or scalar (in mol. frac Fe)
     pfunc: function returing pressure in GPa as a function of radius in m (callable), or scalar (GPa)
     gfunc: function returning acceleration due to gravity in m/s as a function of radius in m (callable)
@@ -254,6 +254,7 @@ def evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
     max_time: maximum time for the IVP solver (s)
     k0: prefactor for particle growth rate (m/s)
     dl: diffusivity of oxygen in liquid iron (UNITS?)
+    k: thermal conductivity of the layer (W/m/K)
     mu: kinematic viscosity of liquid iron(UNITS)
     i0: prefactor for CNT (s^-1 m^-3)
     surf_energy: surface energy for CNT (J m^-2)
@@ -271,6 +272,8 @@ def evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
         Defaults to 1%
     max_rel_error: maximum absolute error on any particle radius at any analysis position to be considered converged. 
         Defaults to 1 mm.
+    verbose: optional bool default false. If true print lots of output
+    silent: optional bool default false. If true suppress all output. Default should be sensible as a log of a run to a terminal.
         
     Returns:
     solutions: list of IVP solution objects, one per nucleation_radii
@@ -286,89 +289,169 @@ def evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
         radius.
     crit_nuc_radii: CNT critical radii for the solution (m)
     nucleation_rates: CNT nucleation rates for the solution (events s^-1 m^-3)
+    t_point: Optimised (self consistent) temperature profile through layer evaluated at points (K)
+    xl_points: Optimised (self consistent) liquid composition through layer evaluated at points (mol frac Fe)
     """
     
-    # Set initial liquid compositioon # TODO: pass xfunc in as argument 
-    xl_func = spi.interp1d(analysis_radii, xfunc(analysis_radii), fill_value='extrapolate')
-    steps = 0
+    if not silent:
+        print("Starting loop for self consistent calculation")
+        
+    converged = False
+    step = 0
+    while not converged:
+
+        print(f"Starting step {step}")
+        
+        # Values before calculation
+        input_t_points = tfunc(analysis_radii)
+        input_x_points = xfunc(analysis_radii)
+        
+        # Calculation
+        solutions, particle_densities, growth_rate, solid_vf, \
+        particle_radius_unnormalised, partial_particle_densities, \
+        crit_nuc_radii, nucleation_rates, out_t_points, out_x_points = evaluate_flayer(
+            tfunc, xfunc, pfunc, gfunc, start_time, max_time, k0, dl, k, mu, i0, 
+            surf_energy, wetting_angle, hetrogeneous_radius, nucleation_radii, 
+            analysis_radii, radius_inner_core, radius_top_flayer, verbose, silent)
+        
+        # Errors
+        max_x_abs_error = np.max(np.absolute(out_x_points - input_x_points))
+        max_t_abs_error = np.max(np.absolute(out_t_points - input_t_points))
+        max_x_rel_error = np.max(np.absolute(out_x_points - input_x_points) 
+                                 / np.absolute(input_x_points))
+        max_t_rel_error = np.max(np.absolute(out_t_points - input_t_points) 
+                                 / np.absolute(input_t_points))
+        
+        converged_x = np.allclose(out_x_points, input_x_points,
+                          atol=max_absolute_error, rtol=max_rel_error)
+        converged_t = np.allclose(out_t_points, input_t_points,
+                          atol=max_absolute_error, rtol=max_rel_error)
+        converged = converged_x and converged_t
+                  
+        # Setup new functions
+        xfunc = spi.interp1d(analysis_radii, out_x_points, fill_value='extrapolate')
+        tfunc = spi.interp1d(analysis_radii, out_t_points, fill_value='extrapolate')
+        
+        if not silent:
+            print(f"After step {step} maximum errors are:")
+            print(f"    Composition {max_t_abs_error:.3g} (K), {max_t_rel_error:.3g} (relative)")
+            print(f"    Composition {max_x_abs_error:.3g} (mol frac Fe), {max_x_rel_error:.3g} (relative)")
+            if converged_x:
+                print("    Composition has converged")
+            if converged_t:
+                print("    Temperature has converged")
+        
+    return solutions, particle_densities, growth_rate, solid_vf, \
+        particle_radius_unnormalised, partial_particle_densities, \
+        xfunc, crit_nuc_radii, nucleation_rates # tfunc
+
+
+def evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
+                    k0, dl, k, mu, i0, surf_energy, wetting_angle, hetrogeneous_radius,
+                    nucleation_radii, analysis_radii, radius_inner_core, 
+                    radius_top_flayer, verbose=False, silent=False):
+    """
+    Create a single solution for the F-layer assuming non-equilibrium growth and falling
+    of iron crystals
+    
+    This involves integration of the results from falling-growing crystal calculations with the
+    integration being with respect to the nucleation radius. We thus need to perform the calculations
+    at a set of (provided) nucleation radii for the integration. Each of thse is assoceated with 
+    a nucleation rate, which is calculated first. We calculate the density of falling particles (and thus their seperation)
+    at a number of analysis radii. Finally, we calcuate the new temperautre and liquid composition
+    profiles consistnet with the solid production. In general these will not be self consisent as
+    they were not used to compute the crystal nucleation, growth or falling.
+    
+    Input arguments:
+    
+    tfunc: function returing temperature in K as a function of radius in m (callable), or scalar (K)
+    xfunc: function returing total composition in mol. frac Fe as a function of radius in m 
+           (callable), or scalar (in mol. frac Fe)
+    pfunc: function returing pressure in GPa as a function of radius in m (callable), or scalar (GPa)
+    gfunc: function returning acceleration due to gravity in m/s as a function of radius in m (callable)
+           or scalar (m/s)
+    start_time: initial time condition for IVP solver (s)
+    max_time: maximum time for the IVP solver (s)
+    k0: prefactor for particle growth rate (m/s)
+    dl: diffusivity of oxygen in liquid iron (UNITS?)
+    k: thermal conductivity (W/m/K)
+    mu: kinematic viscosity of liquid iron(UNITS)
+    i0: prefactor for CNT (s^-1 m^-3)
+    surf_energy: surface energy for CNT (J m^-2)
+    nucleation_radii: The radii where we explicity consider nuclation to take place. These are used
+        as integration points for a numerical integration over the whole nucleating layer so we need
+        enough of thse to converge. However, as the solution seems to be well behaved O(10) seems to
+        be enough. A 1D array of radii (measured outwards from the center of the Earth) in m.
+    nucleation_rates: The nucleation rate (in events per m^3 per s) at each nucleation_radii. 1D array
+    analysis_radii: locations where the particle density and other output parameters are calculated.
+        1D array in m. No particular relationship with nucleation radii assumes. This is also the place
+        where the self conssitency of the solution is checked.
+    radius_inner_core: inner core boundary radius (m)
+    radius_top_flayer: radius to top of F-layer (m)
+    verbose: optional bool default false. If true print lots of output
+    silent: optional bool default false. If true suppress all output. Default should be sensible as a log of a run to a terminal.
+        
+    Returns:
+    solutions: list of IVP solution objects, one per nucleation_radii
+    particle_densities: array of total particle number densities (particles per m^3) evaluated at the
+        analysis_radii
+    calculated_interaction_radii: mean seperation between particles, evaluated at the analysis_radii (in m)
+    icb_growth_rate: calculated growth rate of the inner core (in m/s)
+    solid_vf: volume fraction solid evaluated at each analysis_radii
+    particle_radius_unnormalised: 2D numpy array of size (analysis_radii, nucleation_radii) giving 
+        giving the crystal radius measured at an analysis radius which nucleated at a nucleation radius.
+    particle_radius_histogram: 2D numpy array of size (analysis_radii, nucleation_radii) giving the
+        product of the particle radius and corresponding density at each analysis radius for each nucleation
+        radius.
+    crit_nuc_radii: CNT critical radii for the solution (m)
+    nucleation_rates: CNT nucleation rates for the solution (events s^-1 m^-3)
+    t_points: new evaluation of temperature on grid points (K)
+    xl_points: new evaluation of iron content on gris points (mol frac Fe)
+    """
     
     # Calculate nucleation rates and radii at each radius
+    if not silent:
+        print("Nucleation calculation")
+        print(f"Prefactor: {i0:.3g} s^-1 m^-3, surface energy {surf_energy:.3g}")
+        if wetting_angle == 180.0:
+            print("Homogenious nucleation")
+        else:
+            print(f"Hetrogenious nucleation, wetting angle {wetting_angle:.3g} degrees")
     crit_nuc_radii = np.zeros_like(analysis_radii)
     nucleation_rates = np.zeros_like(analysis_radii)
     crit_nuc_energy = np.zeros_like(analysis_radii)
-    print(f"Wetting angle: {wetting_angle}")
+    if verbose or (not silent):
+        print("Radius (km), P (GPa), T (K), X (mol. frac Fe), I (s^-1m^-3), r0 (m)")
     for i, r in enumerate(analysis_radii):
         crit_nuc_radii[i], nucleation_rates[i], crit_nuc_energy[i]  = nucleation.calc_nucleation(
-            float(xl_func(r)), float(pfunc(r)), float(tfunc(r)), surf_energy, i0, theta=wetting_angle)
+            float(xfunc(r)), float(pfunc(r)), float(tfunc(r)), surf_energy, i0, theta=wetting_angle)
         if hetrogeneous_radius is not None:
             crit_nuc_radii[i] = hetrogeneous_radius
         if verbose:
-            print("R =", r, "I = ", nucleation_rates[i], "r0 = ", crit_nuc_radii[i], "gc = ", crit_nuc_energy[i])
-        print("R =", r, "I = ", nucleation_rates[i], "r0 = ", crit_nuc_radii[i], "gc = ", crit_nuc_energy[i])
-    
-    # Calculate an initial guess using the provided liquid compositioon (TODO: pass in xl)
+            print(f"{r/1000.0:4g} {pfunc(r):3g} {tfunc(r):4g} {xfunc(r):.3g} {nucleation_rates[i]:.3g} {crit_nuc_radii[i]:.3g}")
+        elif not silent:
+            if i%(len(analysis_radii)//10) == 0: 
+                print(f"{r/1000.0:4g} {pfunc(r):3g} {tfunc(r):4g} {xfunc(r):.3g} {nucleation_rates[i]:.3g} {crit_nuc_radii[i]:.3g}")
+
+    if not silent:
+        print(f"Finding {len(analysis_radii)} IVP solutions")
+    # Calculate an initial guess using the provided liquid compositioon
     solutions, particle_densities, growth_rate, solid_vf, \
         particle_radius_unnormalised, partial_particle_densities, solid_volume_production_rate = integrate_snow_zone(
         analysis_radii, radius_inner_core, radius_top_flayer, nucleation_radii, 
-        nucleation_rates, tfunc, xl_func, pfunc, gfunc,
+        nucleation_rates, tfunc, xfunc, pfunc, gfunc,
         start_time, max_time, crit_nuc_radii, k0, dl, mu, verbose=verbose)
     
-    # Work out the updated liquid composition to maintain mass
-    # FIXME: to function
-    xl_points = np.zeros_like(analysis_radii)
-    for i, analysis_r in enumerate(analysis_radii):
-        _, mol_vol_solid, _ = feot.solid_molar_volume(1.0, pfunc(analysis_r), tfunc(analysis_r))
-        mol_vol_liquid, _, _ = feot.liquid_molar_volume(xl_func(analysis_r), pfunc(analysis_r), tfunc(analysis_r))
-        moles_solid = (solid_vf[i] * 100.0**3) / mol_vol_solid
-        moles_liquid = ((1.0 - solid_vf[i]) * 100.0**3) / mol_vol_liquid
-        mol_frac_solid = moles_solid / (moles_solid + moles_liquid)
-        xl_points[i] = xfunc(analysis_r) * (1.0 - mol_frac_solid)
-    xl_func = spi.interp1d(analysis_radii, xl_points, fill_value='extrapolate')
-    
-    converged = False
-    while not converged:
-        steps = steps + 1
-        
-        # Recalculate nucleation rates and radii at each radius
-        for i, r in enumerate(analysis_radii):
-            crit_nuc_radii[i], nucleation_rates[i], crit_nuc_energy[i] = nucleation.calc_nucleation(
-                float(xl_func(r)), float(pfunc(r)), float(tfunc(r)), surf_energy, i0, theta=wetting_angle)
-
-        print(f"Maximum nuc rate {np.nanmax(nucleation_rates)}")
-        
-        # Recalculate solution with updated (TODO: xl...)
-        solutions, particle_densities, growth_rate, solid_vf, \
-             particle_radius_unnormalised, partial_particle_densities, solid_volume_production_rate = integrate_snow_zone(
-             analysis_radii, radius_inner_core, radius_top_flayer, 
-             nucleation_radii, nucleation_rates, tfunc, xl_func, pfunc, gfunc,
-             start_time, max_time, crit_nuc_radii, k0, dl, mu, verbose=verbose)
-
-        print(f"Maximim solid volume fraction {solid_vf.max()}")
-        
-        # Work out the updated liquid composition to maintain mass  
-        # FIXME: to function
-        new_xl_points = np.zeros_like(analysis_radii)
-        for i, analysis_r in enumerate(analysis_radii):
-            _, mol_vol_solid, _ = feot.solid_molar_volume(1.0, pfunc(analysis_r), tfunc(analysis_r))
-            mol_vol_liquid, _, _ = feot.liquid_molar_volume(xl_func(analysis_r), pfunc(analysis_r), tfunc(analysis_r))
-            moles_solid = (solid_vf[i] * 100.0**3) / mol_vol_solid
-            moles_liquid = ((1.0 - solid_vf[i]) * 100.0**3) / mol_vol_liquid
-            mol_frac_solid = moles_solid / (moles_solid + moles_liquid)
-            new_xl_points[i] = xfunc(analysis_r) * (1.0 - mol_frac_solid)
-        xl_func = spi.interp1d(analysis_radii, xl_points, fill_value='extrapolate')
-        
-        converged = np.allclose(xl_points, new_xl_points,
-                                atol=max_absolute_error, rtol=max_rel_error)
-        
-        print("Iteration", steps, "maximum absolute liquid composition difference is", 
-             np.max(np.absolute(xl_points - new_xl_points)))
-        if converged:
-            print("Liquid composition in F-layer has converged!")
-        
-        xl_points = new_xl_points
+    # Here we should calculate the updated composion. For now just return input so we can test without self consistent loop
+    # FIXME!
+    t_points = tfunc(analysis_radii)
+    xl_points = xfunc(analysis_radii)
+    if not silent:
+        print("NOT doing the diffusion calculation")
         
     return solutions, particle_densities, growth_rate, solid_vf, \
-        particle_radius_unnormalised, partial_particle_densities, xl_func, crit_nuc_radii, nucleation_rates
+        particle_radius_unnormalised, partial_particle_densities, \
+        crit_nuc_radii, nucleation_rates, t_points, xl_points
 
 
 def analyse_flayer(solutions, integration_radii, analysis_radii, nucleation_rates, radius_inner_core,
