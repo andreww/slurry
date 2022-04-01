@@ -8,6 +8,7 @@ import particle_evolution
 import feo_thermodynamics as feot
 import earth_model
 import nucleation
+import layer_diffusion
 
 # Functions to build and evaluate models fo the F-layer
 # assuming a prescribed total composition and temperature
@@ -330,16 +331,19 @@ def solve_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
                   
         # Setup new functions
         xfunc = spi.interp1d(analysis_radii, out_x_points, fill_value='extrapolate')
-        tfunc = spi.interp1d(analysis_radii, out_t_points, fill_value='extrapolate')
+        updated_t_points = input_t_points + ((out_t_points - input_t_points)/10.0)
+        tfunc = spi.interp1d(analysis_radii, updated_t_points, fill_value='extrapolate')
         
         if not silent:
             print(f"After step {step} maximum errors are:")
-            print(f"    Composition {max_t_abs_error:.3g} (K), {max_t_rel_error:.3g} (relative)")
+            print(f"    Temperature {max_t_abs_error:.3g} (K), {max_t_rel_error:.3g} (relative)")
             print(f"    Composition {max_x_abs_error:.3g} (mol frac Fe), {max_x_rel_error:.3g} (relative)")
             if converged_x:
                 print("    Composition has converged")
             if converged_t:
                 print("    Temperature has converged")
+                
+        step = step + 1
         
     return solutions, particle_densities, growth_rate, solid_vf, \
         particle_radius_unnormalised, partial_particle_densities, \
@@ -442,16 +446,39 @@ def evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
         nucleation_rates, tfunc, xfunc, pfunc, gfunc,
         start_time, max_time, crit_nuc_radii, k0, dl, mu, verbose=verbose)
     
+    
+    latent_heat = 0.75 * 1000000.0 # J/kg - from Davies 2015, could calculate this from the thermodynamics I think (FIXME).
+    _, _, _, fe_density, _, _ = feot.densities(1.0, pfunc(analysis_radii), tfunc(analysis_radii))
+    mass_production_rate = solid_volume_production_rate * fe_density
+    heat_production_rate = mass_production_rate * latent_heat
     # Here we should calculate the updated composion. For now just return input so we can test without self consistent loop
     # FIXME!
-    t_points = tfunc(analysis_radii)
+    top_bc = tfunc(analysis_radii[-1])
+    bottom_bc = 0.0
+    if verbose or (not silent):
+        print("Finding T to match heat production rate")
+        print(f"Boundary conditions, top: {top_bc} K, bottom {bottom_bc} K/m")
+        print("Radius (km), P (GPa), Guess T (K), dm/dt (kg/s), Q (W/m^3), Calculated T (K)")
+    t_points_out = layer_diffusion.solve_layer_diffusion(analysis_radii, heat_production_rate, 
+                                                         100.0, tfunc(analysis_radii),
+                                                         top_value_bc=top_bc,
+                                                         bottom_derivative_bc=bottom_bc)
+    if verbose:
+        for i, r in enumerate(analysis_radii):
+            print(f"{r/1000.0:4g} {pfunc(r):3g} {tfunc(r):4g} {mass_production_rate[i]:.3g} {heat_production_rate[i]:.3g} {t_points_out[i]:4g}")
+    elif not silent:
+        for i, r in enumerate(analysis_radii):
+            if i%(len(analysis_radii)//10) == 0: 
+                print(f"{r/1000.0:4g} {pfunc(r):3g} {tfunc(r):4g} {mass_production_rate[i]:.3g} {heat_production_rate[i]:.3g} {t_points_out[i]:4g}")     
+              
+              
     xl_points = xfunc(analysis_radii)
     if not silent:
-        print("NOT doing the diffusion calculation")
+        print("NOT doing the diffusion calculation for composition")
         
     return solutions, particle_densities, growth_rate, solid_vf, \
         particle_radius_unnormalised, partial_particle_densities, \
-        crit_nuc_radii, nucleation_rates, t_points, xl_points
+        crit_nuc_radii, nucleation_rates, t_points_out, xl_points
 
 
 def analyse_flayer(solutions, integration_radii, analysis_radii, nucleation_rates, radius_inner_core,
