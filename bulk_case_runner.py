@@ -33,8 +33,8 @@ def run_flayer_case(input_data, filename=None):
     output_data: a dictionary of input and output data"""
     
     solutions, analysis_radii, particle_densities, calculated_seperation, solid_vf, \
-        particle_radii, partial_particle_densities, growth_rate, opt_xl, crit_nuc_radii, nucleation_rates, \
-        vf_ratio = flayer.flayer_case(**input_data)
+        particle_radii, partial_particle_densities, growth_rate, crit_nuc_radii, nucleation_rates, \
+        vf_ratio, out_x_points, out_t_points = flayer.flayer_case(**input_data)
     
     output_data = dict(input_data)
     
@@ -46,10 +46,11 @@ def run_flayer_case(input_data, filename=None):
     output_data["particle_radii"] = particle_radii
     output_data["partial_particle_densities"] = partial_particle_densities
     output_data["growth_rate"] = growth_rate
-    output_data["opt_xl"] = opt_xl
     output_data["crit_nuc_radii"] = crit_nuc_radii
     output_data["nucleation_rates"] = nucleation_rates
     output_data["vf_ratio"] = vf_ratio
+    output_data["out_x_points"] = out_x_points
+    output_data["out_t_points"] = out_t_points
     
     if filename is not None:
         with open(filename, 'wb') as f:

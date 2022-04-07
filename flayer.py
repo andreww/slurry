@@ -28,8 +28,8 @@ def flayer_case(f_layer_thickness, delta_t_icb, xfe_outer_core, xfe_icb,
                 number_of_analysis_points,
                 wetting_angle=180.0, hetrogeneous_radius=None,
                 r_icb=1221.5E3, r_cmb=3480.0E3, gruneisen_parameter=1.5,
-                start_time=0.0, max_time=1.0E12, max_rel_error=0.01,
-                max_absolute_error=0.001, verbose=False):
+                start_time=0.0, max_time=1.0E12, max_rel_error=1.0E-5,
+                max_absolute_error=1.0E-8, verbose=False):
     """
     Setup, run and analyse a non-equilibrium F-layer model
     
@@ -98,26 +98,28 @@ def flayer_case(f_layer_thickness, delta_t_icb, xfe_outer_core, xfe_icb,
     # doit!
     solutions, particle_densities, growth_rate, solid_vf, \
         particle_radius_unnormalised, partial_particle_densities, opt_xlfunc, \
-        crit_nuc_radii, nucleation_rates = solve_flayer(tfunc, xfunc, 
+        crit_nuc_radii, nucleation_rates, out_x_points, out_t_points  = solve_flayer(tfunc, xfunc, 
         pfunc, gfunc, start_time, max_time, growth_prefactor, 
         chemical_diffusivity, thermal_conductivity, kinematic_viscosity, i0, surf_energy,
         wetting_angle, hetrogeneous_radius,
         nucleation_radii, analysis_radii, r_icb, 
         r_flayer_top, max_rel_error=max_rel_error, max_absolute_error=max_absolute_error,
                                                                                  verbose=verbose)
-    
+
+
     # Post-solution analysis
+    xfunc = spi.interp1d(analysis_radii, out_x_points, fill_value='extrapolate')
+    tfunc = spi.interp1d(analysis_radii, out_t_points, fill_value='extrapolate')
     calculated_seperation, growth_rate, vf_ratio = analyse_flayer(solutions, 
                    nucleation_radii, analysis_radii, nucleation_rates, r_icb,
                    particle_densities, growth_rate, solid_vf,
                    particle_radius_unnormalised, partial_particle_densities, tfunc, xfunc, 
                    pfunc, verbose=verbose)
     
-    opt_xl = opt_xlfunc(analysis_radii)
     
     return solutions, analysis_radii, particle_densities, calculated_seperation, solid_vf, \
-        particle_radius_unnormalised, partial_particle_densities, growth_rate, opt_xl, crit_nuc_radii, nucleation_rates, \
-        vf_ratio
+        particle_radius_unnormalised, partial_particle_densities, growth_rate, crit_nuc_radii, nucleation_rates, \
+        vf_ratio, out_x_points, out_t_points
 
 
 def setup_flayer_functions(r_icb, r_cmb, f_layer_thickness, gruneisen_parameter, delta_t_icb, xfe_outer_core, xfe_icb, **kwargs):
@@ -290,12 +292,14 @@ def solve_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
         radius.
     crit_nuc_radii: CNT critical radii for the solution (m)
     nucleation_rates: CNT nucleation rates for the solution (events s^-1 m^-3)
-    t_point: Optimised (self consistent) temperature profile through layer evaluated at points (K)
+    t_points: Optimised (self consistent) temperature profile through layer evaluated at points (K)
     xl_points: Optimised (self consistent) liquid composition through layer evaluated at points (mol frac Fe)
     """
     
     if not silent:
         print("Starting loop for self consistent calculation")
+
+    liquidus_t = None
         
     converged = False
     step = 0
@@ -329,10 +333,6 @@ def solve_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
                           atol=max_absolute_error, rtol=max_rel_error)
         converged = converged_x and converged_t
                   
-        # Setup new functions
-        xfunc = spi.interp1d(analysis_radii, out_x_points, fill_value='extrapolate')
-        updated_t_points = input_t_points + ((out_t_points - input_t_points)/10.0)
-        tfunc = spi.interp1d(analysis_radii, updated_t_points, fill_value='extrapolate')
         
         if not silent:
             print(f"After step {step} maximum errors are:")
@@ -342,12 +342,40 @@ def solve_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
                 print("    Composition has converged")
             if converged_t:
                 print("    Temperature has converged")
+
+        # Need the liquidus temperature so we can control convergence
+        if liquidus_t is None:
+            liquidus_t = feot.find_liquidus(input_x_points, pfunc(analysis_radii))
+
+        # Setup new functions. We don't just use the new temperature as the
+        # next guess as a 'cold' start will just give high heat flux and 
+        # jump the temperature over the liquidus, so we then have no heat
+        # flux and an isothermal solution - which can get stuck in a loop.
+        # So we set a maximum change in temperature of 10 K, otherwise we
+        # take a 50% step in the direction of the new temperature. Also 
+        # need to avoid stepping over the liquidus
+        xfunc = spi.interp1d(analysis_radii, out_x_points, fill_value='extrapolate')
+        updated_t_points = np.zeros_like(input_t_points)
+        for i in range(len(input_t_points)):
+            if np.absolute(out_t_points[i] - input_t_points[i]) > 10.0:
+                if input_t_points[i] > out_t_points[i]:
+                    updated_t_points[i] = input_t_points[i] - 10.0
+                else:
+                    updated_t_points[i] = input_t_points[i] + 10.0
+            else:
+                updated_t_points[i] = input_t_points[i] + (
+                             (out_t_points[i] - input_t_points[i])*0.5)
+            # But don't jump over tl
+            if (updated_t_points[i] > liquidus_t[i]) and (input_t_points[i] < liquidus_t[i]):
+                updated_t_points[i] = liquidus_t[i]
+
+        tfunc = spi.interp1d(analysis_radii, updated_t_points, fill_value='extrapolate')
                 
         step = step + 1
         
     return solutions, particle_densities, growth_rate, solid_vf, \
         particle_radius_unnormalised, partial_particle_densities, \
-        xfunc, crit_nuc_radii, nucleation_rates # tfunc
+        xfunc, crit_nuc_radii, nucleation_rates, out_x_points, out_t_points 
 
 
 def evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
