@@ -330,6 +330,11 @@ def solve_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
             tfunc, xfunc, pfunc, gfunc, start_time, max_time, k0, dl, k, mu, i0, 
             surf_energy, wetting_angle, hetrogeneous_radius, nucleation_radii, 
             analysis_radii, radius_inner_core, radius_top_flayer, verbose, silent)
+    
+    # We should report the temperatures we used for the final calculation
+    # (we should also report the output temperatures too, but they will match 
+    # iff the convergence has converged!
+    out_t_points = tfunc(analysis_radii)
         
     return solutions, particle_densities, growth_rate, solid_vf, \
         particle_radius_unnormalised, partial_particle_densities, \
