@@ -297,86 +297,68 @@ def solve_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
     """
     
     if not silent:
-        print("Starting loop for self consistent calculation")
+        print("Running optimisation to find self conssitent temperature")
 
-    liquidus_t = None
-        
-    converged = False
-    step = 0
-    while not converged:
-
-        print(f"Starting step {step}")
-        
-        # Values before calculation
-        input_t_points = tfunc(analysis_radii)
-        input_x_points = xfunc(analysis_radii)
-        
-        # Calculation
-        solutions, particle_densities, growth_rate, solid_vf, \
-        particle_radius_unnormalised, partial_particle_densities, \
-        crit_nuc_radii, nucleation_rates, out_t_points, out_x_points = evaluate_flayer(
+    # Optimiser takes array of temperatures, not function. So evaluate for initial guess
+    input_t_points = tfunc(analysis_radii)
+    
+    res = spo.minimize(evaluate_flayer_wrapper_func, input_t_points, args=(xfunc, pfunc, 
+            gfunc, start_time, max_time, k0, dl, k, mu, i0, 
+            surf_energy, wetting_angle, hetrogeneous_radius, nucleation_radii, 
+            analysis_radii, radius_inner_core, radius_top_flayer),
+            options={'disp': True})
+    
+    if not silent:
+        print("Optimisation done. Results are:")
+        print(res)
+    if not res.success:
+        print("***************************************************************************")
+        print("***************************************************************************")
+        print("NB: Optimiser failed! Will run final point (and store) for possible restart")
+        print("***************************************************************************")
+        print("***************************************************************************")
+    
+    # Function of self consistent temperatures
+    tfunc = spi.interp1d(analysis_radii, res.x, fill_value='extrapolate')
+    
+    # Do calculation for self conssitent location
+    if not silent:
+        print("Recaculating F-layer solution at optimum temperature")
+    solutions, particle_densities, growth_rate, solid_vf, \
+    particle_radius_unnormalised, partial_particle_densities, \
+    crit_nuc_radii, nucleation_rates, out_t_points, out_x_points = evaluate_flayer(
             tfunc, xfunc, pfunc, gfunc, start_time, max_time, k0, dl, k, mu, i0, 
             surf_energy, wetting_angle, hetrogeneous_radius, nucleation_radii, 
             analysis_radii, radius_inner_core, radius_top_flayer, verbose, silent)
-        
-        # Errors
-        max_x_abs_error = np.max(np.absolute(out_x_points - input_x_points))
-        max_t_abs_error = np.max(np.absolute(out_t_points - input_t_points))
-        max_x_rel_error = np.max(np.absolute(out_x_points - input_x_points) 
-                                 / np.absolute(input_x_points))
-        max_t_rel_error = np.max(np.absolute(out_t_points - input_t_points) 
-                                 / np.absolute(input_t_points))
-        
-        converged_x = np.allclose(out_x_points, input_x_points,
-                          atol=max_absolute_error, rtol=max_rel_error)
-        converged_t = np.allclose(out_t_points, input_t_points,
-                          atol=max_absolute_error, rtol=max_rel_error)
-        converged = converged_x and converged_t
-                  
-        
-        if not silent:
-            print(f"After step {step} maximum errors are:")
-            print(f"    Temperature {max_t_abs_error:.3g} (K), {max_t_rel_error:.3g} (relative)")
-            print(f"    Composition {max_x_abs_error:.3g} (mol frac Fe), {max_x_rel_error:.3g} (relative)")
-            if converged_x:
-                print("    Composition has converged")
-            if converged_t:
-                print("    Temperature has converged")
-
-        # Need the liquidus temperature so we can control convergence
-        if liquidus_t is None:
-            liquidus_t = feot.find_liquidus(input_x_points, pfunc(analysis_radii))
-
-        # Setup new functions. We don't just use the new temperature as the
-        # next guess as a 'cold' start will just give high heat flux and 
-        # jump the temperature over the liquidus, so we then have no heat
-        # flux and an isothermal solution - which can get stuck in a loop.
-        # So we set a maximum change in temperature of 10 K, otherwise we
-        # take a 50% step in the direction of the new temperature. Also 
-        # need to avoid stepping over the liquidus
-        xfunc = spi.interp1d(analysis_radii, out_x_points, fill_value='extrapolate')
-        updated_t_points = np.zeros_like(input_t_points)
-        for i in range(len(input_t_points)):
-            if np.absolute(out_t_points[i] - input_t_points[i]) > 10.0:
-                if input_t_points[i] > out_t_points[i]:
-                    updated_t_points[i] = input_t_points[i] - 10.0
-                else:
-                    updated_t_points[i] = input_t_points[i] + 10.0
-            else:
-                updated_t_points[i] = input_t_points[i] + (
-                             (out_t_points[i] - input_t_points[i])*0.5)
-            # But don't jump over tl
-            if (updated_t_points[i] > liquidus_t[i]) and (input_t_points[i] < liquidus_t[i]):
-                updated_t_points[i] = liquidus_t[i]
-
-        tfunc = spi.interp1d(analysis_radii, updated_t_points, fill_value='extrapolate')
-                
-        step = step + 1
         
     return solutions, particle_densities, growth_rate, solid_vf, \
         particle_radius_unnormalised, partial_particle_densities, \
         xfunc, crit_nuc_radii, nucleation_rates, out_x_points, out_t_points 
 
+
+def evaluate_flayer_wrapper_func(tpoints, xfunc, pfunc, gfunc, start_time, max_time,
+                    k0, dl, k, mu, i0, surf_energy, wetting_angle, hetrogeneous_radius,
+                    nucleation_radii, analysis_radii, radius_inner_core, 
+                    radius_top_flayer):
+    """
+    Wrapper function around evaulate_flayer which we can pass to scipy optimise
+    
+    returns the sum of the squared difference between tpoints and calculated temperatures
+    """
+    tfunc = spi.interp1d(analysis_radii, tpoints, fill_value='extrapolate')
+    
+    solutions, particle_densities, growth_rate, solid_vf, \
+        particle_radius_unnormalised, partial_particle_densities, \
+        crit_nuc_radii, nucleation_rates, t_points_out, xl_points = \
+            evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
+                    k0, dl, k, mu, i0, surf_energy, wetting_angle, hetrogeneous_radius,
+                    nucleation_radii, analysis_radii, radius_inner_core, 
+                    radius_top_flayer, verbose=False, silent=False)
+    
+    sse = np.sqrt(np.sum((tpoints - t_points_out)**2)/len(analysis_radii))
+    print(f"Mean abs error = {sse:4g} (K)")
+    return sse
+    
 
 def evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
                     k0, dl, k, mu, i0, surf_energy, wetting_angle, hetrogeneous_radius,
@@ -459,7 +441,7 @@ def evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
             float(xfunc(r)), float(pfunc(r)), float(tfunc(r)), surf_energy, i0, theta=wetting_angle)
         if hetrogeneous_radius is not None:
             crit_nuc_radii[i] = hetrogeneous_radius
-        if verbose:
+        if verbose or (not silent and len(analysis_radii) <= 10):
             print(f"{r/1000.0:4g} {pfunc(r):3g} {tfunc(r):4g} {xfunc(r):.3g} {nucleation_rates[i]:.3g} {crit_nuc_radii[i]:.3g}")
         elif not silent:
             if i%(len(analysis_radii)//10) == 0: 
@@ -491,7 +473,7 @@ def evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
                                                          100.0, tfunc(analysis_radii),
                                                          top_value_bc=top_bc,
                                                          bottom_derivative_bc=bottom_bc)
-    if verbose:
+    if verbose or (not silent and len(analysis_radii) <= 10):
         for i, r in enumerate(analysis_radii):
             print(f"{r/1000.0:4g} {pfunc(r):3g} {tfunc(r):4g} {mass_production_rate[i]:.3g} {heat_production_rate[i]:.3g} {t_points_out[i]:4g}")
     elif not silent:
