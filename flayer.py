@@ -306,7 +306,7 @@ def solve_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
             gfunc, start_time, max_time, k0, dl, k, mu, i0, 
             surf_energy, wetting_angle, hetrogeneous_radius, nucleation_radii, 
             analysis_radii, radius_inner_core, radius_top_flayer),
-            options={'disp': True})
+            options={'disp': True}, method='Powell')
     
     if not silent:
         print("Optimisation done. Results are:")
@@ -462,7 +462,7 @@ def evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
         start_time, max_time, crit_nuc_radii, k0, dl, mu, verbose=verbose)
     
     
-    latent_heat = 0.75 * 1000000.0 # J/kg - from Davies 2015, could calculate this from the thermodynamics I think (FIXME).
+    latent_heat = 0.75 * 1000000.0 # J/kg - from Davies 2015, could calculate this from the thermodynamics I think (FIXME). 0.75E6
     _, _, _, fe_density, _, _ = feot.densities(1.0, pfunc(analysis_radii), tfunc(analysis_radii))
     mass_production_rate = solid_volume_production_rate * fe_density
     heat_production_rate = mass_production_rate * latent_heat
