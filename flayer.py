@@ -358,10 +358,10 @@ def evaluate_flayer_wrapper_func(tpoints, xfunc, pfunc, gfunc, start_time, max_t
             evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
                     k0, dl, k, mu, i0, surf_energy, wetting_angle, hetrogeneous_radius,
                     nucleation_radii, analysis_radii, radius_inner_core, 
-                    radius_top_flayer, verbose=False, silent=False)
+                    radius_top_flayer, verbose=False, silent=True)
     
     sse = np.sqrt(np.sum((tpoints - t_points_out)**2)/len(analysis_radii))
-    print(f"Mean abs error = {sse:4g} (K)")
+    # Should be in callback: print(f"Mean abs error = {sse:4g} (K)")
     return sse
     
 
