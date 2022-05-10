@@ -306,15 +306,31 @@ def solve_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
             gfunc, start_time, max_time, k0, dl, k, mu, i0, 
             surf_energy, wetting_angle, hetrogeneous_radius, nucleation_radii, 
             analysis_radii, radius_inner_core, radius_top_flayer),
-            options={'disp': True}, method='Powell')
+            options={'disp': True, 'maxiter': 3}, method='Powell')
     
     if not silent:
-        print("Optimisation done. Results are:")
+        print("Powell optimisation done. Results are:")
         print(res)
     if not res.success:
         print("***************************************************************************")
         print("***************************************************************************")
-        print("NB: Optimiser failed! Will run final point (and store) for possible restart")
+        print("NB: Powell ptimiser failed! run BFGS anyway")
+        print("***************************************************************************")
+        print("***************************************************************************")
+    
+    res = spo.minimize(evaluate_flayer_wrapper_func, res.x, args=(xfunc, pfunc, 
+            gfunc, start_time, max_time, k0, dl, k, mu, i0, 
+            surf_energy, wetting_angle, hetrogeneous_radius, nucleation_radii, 
+            analysis_radii, radius_inner_core, radius_top_flayer),
+            options={'disp': True}, method='Nelder-Mead')
+    
+    if not silent:
+        print("BFGS optimisation done. Results are:")
+        print(res)
+    if not res.success:
+        print("***************************************************************************")
+        print("***************************************************************************")
+        print("NB: BFGS optimiser failed! Storing results anyway")
         print("***************************************************************************")
         print("***************************************************************************")
     
@@ -358,10 +374,11 @@ def evaluate_flayer_wrapper_func(tpoints, xfunc, pfunc, gfunc, start_time, max_t
             evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
                     k0, dl, k, mu, i0, surf_energy, wetting_angle, hetrogeneous_radius,
                     nucleation_radii, analysis_radii, radius_inner_core, 
-                    radius_top_flayer, verbose=False, silent=True)
+                    radius_top_flayer, verbose=False, silent=False)
     
     sse = np.sqrt(np.sum((tpoints - t_points_out)**2)/len(analysis_radii))
-    # Should be in callback: print(f"Mean abs error = {sse:4g} (K)")
+    # Should be in callback: 
+    print(f"Mean abs error = {sse:4g} (K)")
     return sse
     
 
