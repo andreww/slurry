@@ -95,6 +95,9 @@ def flayer_case(f_layer_thickness, delta_t_icb, xfe_outer_core, xfe_icb,
     nucleation_radii = np.linspace(r_icb, r_flayer_top, number_of_analysis_points)
     analysis_radii = np.linspace(r_icb, r_flayer_top, number_of_analysis_points)
     
+    t_flayer_top = tfunc(r_flayer_top)
+    print(f"Fixed temperature at top of F-layer {t_flayer_top} K")
+    
     # doit!
     solutions, particle_densities, growth_rate, solid_vf, \
         particle_radius_unnormalised, partial_particle_densities, opt_xlfunc, \
@@ -103,7 +106,7 @@ def flayer_case(f_layer_thickness, delta_t_icb, xfe_outer_core, xfe_icb,
         chemical_diffusivity, thermal_conductivity, kinematic_viscosity, i0, surf_energy,
         wetting_angle, hetrogeneous_radius,
         nucleation_radii, analysis_radii, r_icb, 
-        r_flayer_top, max_rel_error=max_rel_error, max_absolute_error=max_absolute_error,
+        r_flayer_top, t_flayer_top, max_rel_error=max_rel_error, max_absolute_error=max_absolute_error,
                                                                                  verbose=verbose)
 
 
@@ -233,7 +236,7 @@ def setup_flayer_functions(r_icb, r_cmb, f_layer_thickness, gruneisen_parameter,
 def solve_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
                 k0, dl, k, mu, i0, surf_energy, wetting_angle, hetrogeneous_radius,
                 nucleation_radii, analysis_radii, radius_inner_core, 
-                radius_top_flayer, max_rel_error=1.0E-7, max_absolute_error=1.0E-10,
+                radius_top_flayer, t_top_flayer, max_rel_error=1.0E-7, max_absolute_error=1.0E-10,
                 verbose=False, silent=False):
     """
     Create a self consistent solution for the F-layer assuming non-equilibrium growth and falling
@@ -271,6 +274,7 @@ def solve_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
         where the self conssitency of the solution is checked.
     radius_inner_core: inner core boundary radius (m)
     radius_top_flayer: radius to top of F-layer (m)
+    t_top_flayer: temperature at top of F-layer (K), this is fixed
     max_rel_error: maximum relative error on any particle radius at any analysis position to be considered converged. 
         Defaults to 1%
     max_rel_error: maximum absolute error on any particle radius at any analysis position to be considered converged. 
@@ -300,12 +304,12 @@ def solve_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
         print("Running optimisation to find self conssitent temperature")
 
     # Optimiser takes array of temperatures, not function. So evaluate for initial guess
-    input_t_points = tfunc(analysis_radii)
+    input_t_points = tfunc(analysis_radii[:-1])
     
     res = spo.minimize(evaluate_flayer_wrapper_func, input_t_points, args=(xfunc, pfunc, 
             gfunc, start_time, max_time, k0, dl, k, mu, i0, 
             surf_energy, wetting_angle, hetrogeneous_radius, nucleation_radii, 
-            analysis_radii, radius_inner_core, radius_top_flayer),
+            analysis_radii, radius_inner_core, radius_top_flayer, t_top_flayer),
             options={'disp': True, 'maxiter': 3}, method='Powell')
     
     if not silent:
@@ -321,7 +325,7 @@ def solve_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
     res = spo.minimize(evaluate_flayer_wrapper_func, res.x, args=(xfunc, pfunc, 
             gfunc, start_time, max_time, k0, dl, k, mu, i0, 
             surf_energy, wetting_angle, hetrogeneous_radius, nucleation_radii, 
-            analysis_radii, radius_inner_core, radius_top_flayer),
+            analysis_radii, radius_inner_core, radius_top_flayer, t_top_flayer),
             options={'disp': True}, method='Nelder-Mead')
     
     if not silent:
@@ -335,7 +339,8 @@ def solve_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
         print("***************************************************************************")
     
     # Function of self consistent temperatures
-    tfunc = spi.interp1d(analysis_radii, res.x, fill_value='extrapolate')
+    full_t_points = np.append(res.x, t_top_flayer)
+    tfunc = spi.interp1d(analysis_radii, full_t_points, fill_value='extrapolate')
     
     # Do calculation for self conssitent location
     if not silent:
@@ -360,13 +365,14 @@ def solve_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
 def evaluate_flayer_wrapper_func(tpoints, xfunc, pfunc, gfunc, start_time, max_time,
                     k0, dl, k, mu, i0, surf_energy, wetting_angle, hetrogeneous_radius,
                     nucleation_radii, analysis_radii, radius_inner_core, 
-                    radius_top_flayer):
+                    radius_top_flayer, t_top_flayer):
     """
     Wrapper function around evaulate_flayer which we can pass to scipy optimise
     
     returns the sum of the squared difference between tpoints and calculated temperatures
     """
-    tfunc = spi.interp1d(analysis_radii, tpoints, fill_value='extrapolate')
+    full_t_points = np.append(tpoints, t_top_flayer)
+    tfunc = spi.interp1d(analysis_radii, full_t_points, fill_value='extrapolate')
     
     solutions, particle_densities, growth_rate, solid_vf, \
         particle_radius_unnormalised, partial_particle_densities, \
@@ -376,7 +382,7 @@ def evaluate_flayer_wrapper_func(tpoints, xfunc, pfunc, gfunc, start_time, max_t
                     nucleation_radii, analysis_radii, radius_inner_core, 
                     radius_top_flayer, verbose=False, silent=False)
     
-    sse = np.sqrt(np.sum((tpoints - t_points_out)**2)/len(analysis_radii))
+    sse = np.sqrt(np.sum((tpoints - t_points_out[:-1])**2)/len(analysis_radii[:-1]))
     # Should be in callback: 
     print(f"Mean abs error = {sse:4g} (K)")
     return sse
