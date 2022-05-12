@@ -187,7 +187,7 @@ def boundary_layers(radius, re, pe_c, sc, fr, warn_peclet=True):
             delta_u_low_fr = delta_u_prefac_low_fr * (fr/re)**(0.5) * 2.0 * radius # above eq I3.11
             delta_c_prefac_low_fr = (1.0E-2)**(1/6) * (1.0E-2*sc)**(1/3) * fr**(-1/6)
             delta_c_low_fr = delta_c_prefac_low_fr * fr**(1/6) / (re**(1/6) * pe_c**(1/3)) * 2.0 * radius # eq I3.12
-        elif re >= 1.0e2:                             # High Re case
+        else:                             # High Re case
             delta_u_high_fr = 10.0 * re**(-0.5) * 2.0 * radius # Prefac only depends on Re... sqrt(100)
             delta_c_prefac_high_fr = (1.0E-2*sc)**(1/3) * (1.0E2*sc)**(-1/3) * (1.0E2)**(1/2) * sc**(1/3)
             delta_c_high_fr = delta_c_prefac_high_fr * re**(-0.5) * (sc)**(-1/3) * 2.0 * radius
@@ -206,6 +206,8 @@ def boundary_layers(radius, re, pe_c, sc, fr, warn_peclet=True):
             delta_u = delta_u_low_fr
         else:
             # fr is close to transition (given as 10 in Inman) so interpolate
+            print(f"Intepolating fr {fr}, re {re}")
+            print(f"between {delta_c_low_fr} and {delta_c_high_fr}")
             delta_c = np.interp(fr, [5.0, 50.0], [delta_c_low_fr, delta_c_high_fr])
             delta_u = np.interp(fr, [5.0, 50.0], [delta_u_low_fr, delta_u_high_fr])
     return delta_u, delta_c
