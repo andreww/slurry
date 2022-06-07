@@ -85,15 +85,16 @@ def flayer_case(f_layer_thickness, delta_t_icb, xfe_outer_core, xfe_icb,
     """
     # Derived values of use
     r_flayer_top = r_icb + f_layer_thickness
-    
-    # Make nterpolation functions for each input property (matching liquidus and
-    # adiabat
-    tfunc, tafunc, xfunc, pfunc, gfunc = setup_flayer_functions(r_icb, r_cmb,
-         f_layer_thickness, gruneisen_parameter, delta_t_icb, xfe_outer_core, xfe_icb)
-    
+        
     # Discretisation points
     nucleation_radii = np.linspace(r_icb, r_flayer_top, number_of_analysis_points)
     analysis_radii = np.linspace(r_icb, r_flayer_top, number_of_analysis_points)
+    
+    # Make interpolation functions for each input property (matching liquidus and
+    # adiabat
+    tfunc, tafunc, ftfunc, tfunc_creator, xfunc, pfunc, gfunc = setup_flayer_functions(r_icb, r_cmb,
+         f_layer_thickness, gruneisen_parameter, delta_t_icb, xfe_outer_core, xfe_icb, analysis_radii)
+
     
     t_flayer_top = tfunc(r_flayer_top)
     print(f"Fixed temperature at top of F-layer {t_flayer_top} K")
@@ -101,7 +102,7 @@ def flayer_case(f_layer_thickness, delta_t_icb, xfe_outer_core, xfe_icb,
     # doit!
     solutions, particle_densities, growth_rate, solid_vf, \
         particle_radius_unnormalised, partial_particle_densities, opt_xlfunc, \
-        crit_nuc_radii, nucleation_rates, out_x_points, out_t_points  = solve_flayer(tfunc, xfunc, 
+        crit_nuc_radii, nucleation_rates, out_x_points, out_t_points, t_params = solve_flayer(ftfunc, tfunc_creator, xfunc, 
         pfunc, gfunc, start_time, max_time, growth_prefactor, 
         chemical_diffusivity, thermal_conductivity, kinematic_viscosity, i0, surf_energy,
         wetting_angle, hetrogeneous_radius,
@@ -112,7 +113,7 @@ def flayer_case(f_layer_thickness, delta_t_icb, xfe_outer_core, xfe_icb,
 
     # Post-solution analysis
     xfunc = spi.interp1d(analysis_radii, out_x_points, fill_value='extrapolate')
-    tfunc = spi.interp1d(analysis_radii, out_t_points, fill_value='extrapolate')
+    tfunc = tfunc_creator(t_params)
     calculated_seperation, growth_rate, vf_ratio = analyse_flayer(solutions, 
                    nucleation_radii, analysis_radii, nucleation_rates, r_icb,
                    particle_densities, growth_rate, solid_vf,
@@ -122,10 +123,11 @@ def flayer_case(f_layer_thickness, delta_t_icb, xfe_outer_core, xfe_icb,
     
     return solutions, analysis_radii, particle_densities, calculated_seperation, solid_vf, \
         particle_radius_unnormalised, partial_particle_densities, growth_rate, crit_nuc_radii, nucleation_rates, \
-        vf_ratio, out_x_points, out_t_points
+        vf_ratio, out_x_points, out_t_points, t_params
 
 
-def setup_flayer_functions(r_icb, r_cmb, f_layer_thickness, gruneisen_parameter, delta_t_icb, xfe_outer_core, xfe_icb, **kwargs):
+def setup_flayer_functions(r_icb, r_cmb, f_layer_thickness, gruneisen_parameter, delta_t_icb,
+                           xfe_outer_core, xfe_icb, analysis_radii, **kwargs):
     """
     This defines the radial functions we are going to need to model the f-layer
     
@@ -195,6 +197,12 @@ def setup_flayer_functions(r_icb, r_cmb, f_layer_thickness, gruneisen_parameter,
     # This is an important point (probably the most important point if we introduce
     # non-equilibrium processes).
     temperature_icb = adabat_icb - delta_t_icb
+    t_func_creator = make_new_t_func_creator(r_flayer_top, r_icb, adabat_t_top_flayer, analysis_radii)
+    t_grad_flayer = (adabat_t_top_flayer - temperature_icb) / f_layer_thickness
+    assert t_grad_flayer < 1.0E-12, "Temperature gradient should be negative"
+    tfunc_blank_params = np.zeros(analysis_radii.size-1)
+    tfunc_blank_params[0] = t_grad_flayer
+    flayer_temperature_function = t_func_creator(tfunc_blank_params)
     @np.vectorize
     def temperature_function(r):
         if r >= r_cmb:
@@ -202,8 +210,7 @@ def setup_flayer_functions(r_icb, r_cmb, f_layer_thickness, gruneisen_parameter,
         elif r > r_flayer_top:
             temp = t_cmb * (prem.density(r/1000.0)/rho_cmb)**gruneisen_parameter
         else: # Will give value inside inner core, but we may need that for IVP solver...
-            temp = temperature_icb + (r - r_icb)*(
-                (adabat_t_top_flayer-temperature_icb)/(r_flayer_top-r_icb))
+            temp = flayer_temperature_function(r)
         return temp
     
 
@@ -229,11 +236,67 @@ def setup_flayer_functions(r_icb, r_cmb, f_layer_thickness, gruneisen_parameter,
             r = 0.0
         return prem.gravity(r/1000.0)
     
-    return temperature_function, adiabatic_temperature_function, composition_function, \
+    return temperature_function, adiabatic_temperature_function, flayer_temperature_function, \
+        t_func_creator, composition_function, \
         pressure_function, gravity_function
 
 
-def solve_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
+def make_new_t_func_creator(radius_top_flayer, r_icb, t_top_flayer, analysis_radii):
+    """
+    Create temperature function creator from model setup
+    
+    The idea is that this is called using the general parameters
+    of the F-layer that remain fixed in any given model run. It
+    returns a function that accepts a set of temperatue parameters
+    that, when called, returns a cublic spline representation of the
+    temperatue through the F-layer. This may be one too many layers of
+    abstraction, but this way the raw temperature function (which is
+    returned by the function that is returned by this function) is
+    quick to evaluate and can easily be updated inside a optimisation
+    loop.
+    
+    Arguments to this function are:
+    
+    radius_top_f_layer: in m
+    r_icb: in m
+    t_top_flayer: this will be fixed for all temperature models, in K
+    analysis_radii: the set of N points where the calculation of particle
+        spacing and so on will be done. This should include the ICB and 
+        the top of the F-layer.
+        
+    Returns a function which returns a cubic spline represnetation of the
+    temperature when called. This takes a single array of N-1 parameters
+    which have the following meaning:
+    
+    parameters[0]: thermal gradient in K/m, should be negative (gets hotter
+        downwards) and be about -0.001 
+    parameters[1:N-1]: temperature purtubations (in K) at each analysis radus
+        other than the inner boundary and the outer boundary.
+        
+    The returned cubic spline is forced to have zero gradient at the ICB and
+    zero second derivative at the top of the F-layer. The temperatuer at the
+    ICB is set by the overall thermal gradient. The temperature at the top
+    of the F-layer cannot be changed once set. This setup matches the 'natural'
+    boundary conditions of the thermal problem, but will need to be changed if
+    we allow direct freezing at the ICB.
+    
+    Good luck!
+    """
+    
+    layer_thickness = radius_top_flayer - r_icb
+    
+    def t_func_creator(params):
+        # params contains dt_dr and a Dt for each point not at the ends 
+        assert params.shape[0] == analysis_radii.shape[0] - 1, "params radii mismatch"
+        dt_dr = params[0]
+        t_points = t_top_flayer - (radius_top_flayer - analysis_radii) * dt_dr
+        t_points[1:-1] = t_points[1:-1] + params[1:]
+        return spi.CubicSpline(analysis_radii, t_points, bc_type=((1, 0.0), (2, 0.0)))
+    
+    return t_func_creator
+
+
+def solve_flayer(ftfunc, tfunc_creator, xfunc, pfunc, gfunc, start_time, max_time,
                 k0, dl, k, mu, i0, surf_energy, wetting_angle, hetrogeneous_radius,
                 nucleation_radii, analysis_radii, radius_inner_core, 
                 radius_top_flayer, t_top_flayer, max_rel_error=1.0E-7, max_absolute_error=1.0E-10,
@@ -303,14 +366,27 @@ def solve_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
     if not silent:
         print("Running optimisation to find self conssitent temperature")
 
-    # Optimiser takes array of temperatures, not function. So evaluate for initial guess
-    input_t_points = tfunc(analysis_radii[:-1])
+    # Optimiser takes array of temperature parameters, not function. 
+    # So we need to build these for the initial guess
+    t_icb_init = ftfunc(radius_inner_core)
+    tgrad = (t_top_flayer - t_icb_init) / (radius_top_flayer - radius_inner_core)
+    params_guess = np.zeros(analysis_radii.size-1)
+    params_guess[0] = tgrad
     
-    res = spo.minimize(evaluate_flayer_wrapper_func, input_t_points, args=(xfunc, pfunc, 
+    lb = np.ones_like(params_guess)
+    lb[0] = 10.0*params_guess[0]
+    lb[1:] = -25.0
+    ub = np.ones_like(params_guess)
+    ub[0] = 0.0
+    ub[1:] = 25.0
+    param_bounds = spo.Bounds(lb, ub)
+    
+    res = spo.minimize(evaluate_flayer_wrapper_func, params_guess, bounds=param_bounds, 
+                       args=(tfunc_creator, xfunc, pfunc, 
             gfunc, start_time, max_time, k0, dl, k, mu, i0, 
             surf_energy, wetting_angle, hetrogeneous_radius, nucleation_radii, 
             analysis_radii, radius_inner_core, radius_top_flayer, t_top_flayer),
-            options={'disp': True, 'maxiter': 3}, method='Powell')
+            options={'disp': True, 'xtol': 0.00001, 'ftol': 0.00001}, method='Powell')
     
     if not silent:
         print("Powell optimisation done. Results are:")
@@ -318,29 +394,13 @@ def solve_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
     if not res.success:
         print("***************************************************************************")
         print("***************************************************************************")
-        print("NB: Powell ptimiser failed! run BFGS anyway")
+        print("NB: Powell ptimiser failed! Storing results anyway")
         print("***************************************************************************")
         print("***************************************************************************")
     
-    res = spo.minimize(evaluate_flayer_wrapper_func, res.x, args=(xfunc, pfunc, 
-            gfunc, start_time, max_time, k0, dl, k, mu, i0, 
-            surf_energy, wetting_angle, hetrogeneous_radius, nucleation_radii, 
-            analysis_radii, radius_inner_core, radius_top_flayer, t_top_flayer),
-            options={'disp': True}, method='Nelder-Mead')
-    
-    if not silent:
-        print("BFGS optimisation done. Results are:")
-        print(res)
-    if not res.success:
-        print("***************************************************************************")
-        print("***************************************************************************")
-        print("NB: BFGS optimiser failed! Storing results anyway")
-        print("***************************************************************************")
-        print("***************************************************************************")
     
     # Function of self consistent temperatures
-    full_t_points = np.append(res.x, t_top_flayer)
-    tfunc = spi.interp1d(analysis_radii, full_t_points, fill_value='extrapolate')
+    tfunc = tfunc_creator(res.x)
     
     # Do calculation for self conssitent location
     if not silent:
@@ -359,10 +419,11 @@ def solve_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
         
     return solutions, particle_densities, growth_rate, solid_vf, \
         particle_radius_unnormalised, partial_particle_densities, \
-        xfunc, crit_nuc_radii, nucleation_rates, out_x_points, out_t_points 
+        xfunc, crit_nuc_radii, nucleation_rates, out_x_points, out_t_points, \
+        res.x
 
 
-def evaluate_flayer_wrapper_func(tpoints, xfunc, pfunc, gfunc, start_time, max_time,
+def evaluate_flayer_wrapper_func(tparams, tfunc_creator, xfunc, pfunc, gfunc, start_time, max_time,
                     k0, dl, k, mu, i0, surf_energy, wetting_angle, hetrogeneous_radius,
                     nucleation_radii, analysis_radii, radius_inner_core, 
                     radius_top_flayer, t_top_flayer):
@@ -371,8 +432,8 @@ def evaluate_flayer_wrapper_func(tpoints, xfunc, pfunc, gfunc, start_time, max_t
     
     returns the sum of the squared difference between tpoints and calculated temperatures
     """
-    full_t_points = np.append(tpoints, t_top_flayer)
-    tfunc = spi.interp1d(analysis_radii, full_t_points, fill_value='extrapolate')
+    tfunc = tfunc_creator(tparams)
+    tpoints = tfunc(analysis_radii)
     
     solutions, particle_densities, growth_rate, solid_vf, \
         particle_radius_unnormalised, partial_particle_densities, \
@@ -382,7 +443,7 @@ def evaluate_flayer_wrapper_func(tpoints, xfunc, pfunc, gfunc, start_time, max_t
                     nucleation_radii, analysis_radii, radius_inner_core, 
                     radius_top_flayer, verbose=False, silent=False)
     
-    sse = np.sqrt(np.sum((tpoints - t_points_out[:-1])**2)/len(analysis_radii[:-1]))
+    sse = np.sqrt(np.sum((tpoints - t_points_out)**2)/len(analysis_radii))
     # Should be in callback: 
     print(f"Mean abs error = {sse:4g} (K)")
     return sse
