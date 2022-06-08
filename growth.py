@@ -107,7 +107,21 @@ def diffusion_growth_velocity(xl, delta, pressure, temperature, dl, k0):
     # Particle growth rate. This needs a self consistent solution as it depends on the composition
     # at the interface, which depends on the growth rate and boundary layer thickness. We optimise for
     # the composition at the inside of the boundary laer
-    xp, root_result = spo.brentq(_optimise_boundary_composition, 1.0E-16, 1.0-1.0E-16, 
+    
+    if temperature > 6000.0:
+        print(f"Temperature is too high ({temperature} K), capping to 7000 K")
+        temperature = 6000.0
+    
+    # Check bounds
+    low_fe_err = _optimise_boundary_composition(1.0E-26, xl, delta, temperature, pressure, dl, k0)
+    high_fe_err = _optimise_boundary_composition(1.0-1.0E-26, xl, delta, temperature, pressure, dl, k0)
+    if np.sign(low_fe_err) == np.sign(high_fe_err):
+        print("About to crash in growth rate root finding")
+        print(f"xp low err = {low_fe_err}, xp high err = {high_fe_err}")
+        print(f"xl = {xl}, delta = {delta}, t = {temperature}, pressure = {pressure}")
+        print(f"dl = {dl}, k0 = {k0}")
+    
+    xp, root_result = spo.brentq(_optimise_boundary_composition, 1.0E-26, 1.0-1.0E-26, 
                                  args=(xl, delta, temperature, pressure, dl, k0),
                                  xtol=2.0e-13, disp=True, full_output=True)
     assert root_result.converged, "Failed to converge in diffusion_growth_velocity"

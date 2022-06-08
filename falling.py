@@ -52,11 +52,11 @@ def zhang_particle_dynamics(radius, kinematic_viscosity, gravity,
     of ambient chemical gradients by sinking spheres. Journal of Fluid Mechanics, 892, A33.
     https://doi.org/10.1017/jfm.2020.191
     """
-    if radius > 10.0:
+    if radius > 2.0:
         # FIXME!!!
         # This is silly. Let's warn and stop things blowing up for now
-        print(f"Radius {radius} m capped to 10 m in falling")
-        radius = 10.0
+        print(f"Radius {radius} m capped to 2 m in falling")
+        radius = 2.0
     # First calculate Re and the falling velocity 
     falling_velocity, re, drag_coefficient = self_consistent_falling_velocity(radius, 
                                   kinematic_viscosity, gravity, delta_density, fluid_density)
@@ -210,6 +210,12 @@ def boundary_layers(radius, re, pe_c, sc, fr, warn_peclet=True):
             print(f"between {delta_c_low_fr} and {delta_c_high_fr}")
             delta_c = np.interp(fr, [5.0, 50.0], [delta_c_low_fr, delta_c_high_fr])
             delta_u = np.interp(fr, [5.0, 50.0], [delta_u_low_fr, delta_u_high_fr])
+            
+    if radius < 0.0:
+        # I suspect this happens in the IVP solver as a particle dissolves
+        delta_u = 0.0
+        delta_c = 0.0
+        
     return delta_u, delta_c
 
 
