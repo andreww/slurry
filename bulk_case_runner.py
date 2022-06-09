@@ -173,22 +173,31 @@ def plot_case_csd_nuc(particle_radii, analysis_radii, partial_particle_densities
     plt.show()
     
 def plot_case_setup(r_icb, r_cmb, f_layer_thickness, gruneisen_parameter, 
-                    delta_t_icb, xfe_outer_core, xfe_icb, **kwargs):
+                    delta_t_icb, xfe_outer_core, xfe_icb, number_of_analysis_points, t_params, **kwargs):
     
     # Generate the functions for temperautre,
     # composition, pressure and gravity
-    tfunc, atfunc, xfunc, pfunc, \
+    
+    # Derived values of use
+    r_flayer_top = r_icb + f_layer_thickness
+        
+    # Discretisation points
+    nucleation_radii = np.linspace(r_icb, r_flayer_top, number_of_analysis_points)
+    analysis_radii = np.linspace(r_icb, r_flayer_top, number_of_analysis_points)
+    
+    tfunc, atfunc, ftfunc, tfunc_creator, xfunc, pfunc, \
         gfunc = flayer.setup_flayer_functions(r_icb, r_cmb, f_layer_thickness, 
                                               gruneisen_parameter, delta_t_icb,
-                                              xfe_outer_core, xfe_icb)
+                                              xfe_outer_core, xfe_icb, analysis_radii)
+    ftfunc = tfunc_creator(t_params)
 
     print("Temperature at CMB is", tfunc(r_cmb), "K")
     print("Temberature at top of F-layer is", tfunc(r_icb+f_layer_thickness), "K")
-    print("Temberature at ICB is", tfunc(r_icb), "K")
+    print("Temberature at ICB is", ftfunc(r_icb), "K")
 
     # Interpolate onto radius for plotting
     rs = np.linspace(r_icb, r_icb+500.0E3)
-    ts = tfunc(rs)
+    ts = ftfunc(rs)
     ats = atfunc(rs)
     ps = pfunc(rs)
     xs = xfunc(rs)
@@ -221,12 +230,23 @@ def plot_case_setup(r_icb, r_cmb, f_layer_thickness, gruneisen_parameter,
     plt.show()
     
 def plot_case_solid_frac(analysis_radii, r_icb, r_cmb, f_layer_thickness, gruneisen_parameter, 
-                    delta_t_icb, xfe_outer_core, xfe_icb, solid_vf, **kwargs):
+                    delta_t_icb, xfe_outer_core, xfe_icb, solid_vf, number_of_analysis_points, t_params, **kwargs):
 
-    tfunc, atfunc, xfunc, pfunc, \
+    # Generate the functions for temperautre,
+    # composition, pressure and gravity
+    
+    # Derived values of use
+    r_flayer_top = r_icb + f_layer_thickness
+        
+    # Discretisation points
+    nucleation_radii = np.linspace(r_icb, r_flayer_top, number_of_analysis_points)
+    analysis_radii = np.linspace(r_icb, r_flayer_top, number_of_analysis_points)
+    
+    tfunc, atfunc, ftfunc, tfunc_creator, xfunc, pfunc, \
         gfunc = flayer.setup_flayer_functions(r_icb, r_cmb, f_layer_thickness, 
                                               gruneisen_parameter, delta_t_icb,
-                                              xfe_outer_core, xfe_icb)
+                                              xfe_outer_core, xfe_icb, analysis_radii)
+    tfunc = tfunc_creator(t_params)
 
     fig, axs = plt.subplots(ncols=2, figsize=(12,6), tight_layout=True)
     ax = axs[0]
