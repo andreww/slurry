@@ -386,7 +386,7 @@ def solve_flayer(ftfunc, tfunc_creator, xfunc, pfunc, gfunc, start_time, max_tim
             gfunc, start_time, max_time, k0, dl, k, mu, i0, 
             surf_energy, wetting_angle, hetrogeneous_radius, nucleation_radii, 
             analysis_radii, radius_inner_core, radius_top_flayer, t_top_flayer),
-            options={'disp': True, 'xtol': 0.00001, 'ftol': 0.00001}, method='Powell')
+            options={'disp': True, 'xtol': 0.0001, 'ftol': 0.1}, method='Powell')
     
     if not silent:
         print("Powell optimisation done. Results are:")
