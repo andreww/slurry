@@ -108,8 +108,15 @@ def diffusion_growth_velocity(xl, delta, pressure, temperature, dl, k0):
     # at the interface, which depends on the growth rate and boundary layer thickness. We optimise for
     # the composition at the inside of the boundary laer
     
+
+    if pressure < 315.0:
+        print(f"Pressure is too low (don't know why, it is {pressure} GPa) capping to 315 GPa")
+        pressure = 315.0
+        if temperature > 5600.0:
+            print(f"Also capping temperature from {temperature} to 5600 K")
+            temperature = 5600.0
     if temperature > 6000.0:
-        print(f"Temperature is too high ({temperature} K), capping to 7000 K")
+        print(f"Temperature is too high ({temperature} K), capping to 6000 K")
         temperature = 6000.0
     
     # Check bounds
