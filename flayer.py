@@ -25,7 +25,7 @@ import layer_diffusion
 def flayer_case(f_layer_thickness, delta_t_icb, xfe_outer_core, xfe_icb,
                 growth_prefactor, chemical_diffusivity, thermal_conductivity,
                 kinematic_viscosity, i0, surf_energy, 
-                number_of_analysis_points,
+                number_of_analysis_points, number_of_knots,
                 wetting_angle=180.0, hetrogeneous_radius=None,
                 r_icb=1221.5E3, r_cmb=3480.0E3, gruneisen_parameter=1.5,
                 start_time=0.0, max_time=1.0E12, max_rel_error=1.0E-5,
@@ -89,11 +89,13 @@ def flayer_case(f_layer_thickness, delta_t_icb, xfe_outer_core, xfe_icb,
     # Discretisation points
     nucleation_radii = np.linspace(r_icb, r_flayer_top, number_of_analysis_points)
     analysis_radii = np.linspace(r_icb, r_flayer_top, number_of_analysis_points)
+    knott_radii = np.linspace(r_icb, r_flayer_top, number_of_knots)
+
     
     # Make interpolation functions for each input property (matching liquidus and
     # adiabat
     tfunc, tafunc, ftfunc, tfunc_creator, xfunc, pfunc, gfunc = setup_flayer_functions(r_icb, r_cmb,
-         f_layer_thickness, gruneisen_parameter, delta_t_icb, xfe_outer_core, xfe_icb, analysis_radii)
+         f_layer_thickness, gruneisen_parameter, delta_t_icb, xfe_outer_core, xfe_icb, knott_radii)
 
     
     t_flayer_top = tfunc(r_flayer_top)
@@ -106,7 +108,7 @@ def flayer_case(f_layer_thickness, delta_t_icb, xfe_outer_core, xfe_icb,
         pfunc, gfunc, start_time, max_time, growth_prefactor, 
         chemical_diffusivity, thermal_conductivity, kinematic_viscosity, i0, surf_energy,
         wetting_angle, hetrogeneous_radius,
-        nucleation_radii, analysis_radii, r_icb, 
+        nucleation_radii, analysis_radii, knott_radii, r_icb, 
         r_flayer_top, t_flayer_top, max_rel_error=max_rel_error, max_absolute_error=max_absolute_error,
                                                                                  verbose=verbose)
 
@@ -127,7 +129,7 @@ def flayer_case(f_layer_thickness, delta_t_icb, xfe_outer_core, xfe_icb,
 
 
 def setup_flayer_functions(r_icb, r_cmb, f_layer_thickness, gruneisen_parameter, delta_t_icb,
-                           xfe_outer_core, xfe_icb, analysis_radii, **kwargs):
+                           xfe_outer_core, xfe_icb, knott_radii, **kwargs):
     """
     This defines the radial functions we are going to need to model the f-layer
     
@@ -197,10 +199,10 @@ def setup_flayer_functions(r_icb, r_cmb, f_layer_thickness, gruneisen_parameter,
     # This is an important point (probably the most important point if we introduce
     # non-equilibrium processes).
     temperature_icb = adabat_icb - delta_t_icb
-    t_func_creator = make_new_t_func_creator(r_flayer_top, r_icb, adabat_t_top_flayer, analysis_radii)
+    t_func_creator = make_new_t_func_creator(r_flayer_top, r_icb, adabat_t_top_flayer, knott_radii)
     t_grad_flayer = (adabat_t_top_flayer - temperature_icb) / f_layer_thickness
     assert t_grad_flayer < 1.0E-12, "Temperature gradient should be negative"
-    tfunc_blank_params = np.zeros(analysis_radii.size-1)
+    tfunc_blank_params = np.zeros(knott_radii.size-1)
     tfunc_blank_params[0] = t_grad_flayer
     flayer_temperature_function = t_func_creator(tfunc_blank_params)
     @np.vectorize
@@ -241,7 +243,7 @@ def setup_flayer_functions(r_icb, r_cmb, f_layer_thickness, gruneisen_parameter,
         pressure_function, gravity_function
 
 
-def make_new_t_func_creator(radius_top_flayer, r_icb, t_top_flayer, analysis_radii):
+def make_new_t_func_creator(radius_top_flayer, r_icb, t_top_flayer, knott_radii):
     """
     Create temperature function creator from model setup
     
@@ -260,8 +262,8 @@ def make_new_t_func_creator(radius_top_flayer, r_icb, t_top_flayer, analysis_rad
     radius_top_f_layer: in m
     r_icb: in m
     t_top_flayer: this will be fixed for all temperature models, in K
-    analysis_radii: the set of N points where the calculation of particle
-        spacing and so on will be done. This should include the ICB and 
+    knott_radii: the set of N points where the cubic spline knots will be
+        located. This should include the ICB and 
         the top of the F-layer.
         
     Returns a function which returns a cubic spline represnetation of the
@@ -287,18 +289,18 @@ def make_new_t_func_creator(radius_top_flayer, r_icb, t_top_flayer, analysis_rad
     
     def t_func_creator(params):
         # params contains dt_dr and a Dt for each point not at the ends 
-        assert params.shape[0] == analysis_radii.shape[0] - 1, "params radii mismatch"
+        assert params.shape[0] == knott_radii.shape[0] - 1, "params radii mismatch"
         dt_dr = params[0]
-        t_points = t_top_flayer - (radius_top_flayer - analysis_radii) * dt_dr
+        t_points = t_top_flayer - (radius_top_flayer - knott_radii) * dt_dr
         t_points[1:-1] = t_points[1:-1] + params[1:]
-        return spi.CubicSpline(analysis_radii, t_points, bc_type=((1, 0.0), (2, 0.0)))
+        return spi.CubicSpline(knott_radii, t_points, bc_type=((1, 0.0), (2, 0.0)))
     
     return t_func_creator
 
 
 def solve_flayer(ftfunc, tfunc_creator, xfunc, pfunc, gfunc, start_time, max_time,
                 k0, dl, k, mu, i0, surf_energy, wetting_angle, hetrogeneous_radius,
-                nucleation_radii, analysis_radii, radius_inner_core, 
+                nucleation_radii, analysis_radii, knott_radii, radius_inner_core, 
                 radius_top_flayer, t_top_flayer, max_rel_error=1.0E-7, max_absolute_error=1.0E-10,
                 verbose=False, silent=False):
     """
@@ -370,7 +372,7 @@ def solve_flayer(ftfunc, tfunc_creator, xfunc, pfunc, gfunc, start_time, max_tim
     # So we need to build these for the initial guess
     t_icb_init = ftfunc(radius_inner_core)
     tgrad = (t_top_flayer - t_icb_init) / (radius_top_flayer - radius_inner_core)
-    params_guess = np.zeros(analysis_radii.size-1)
+    params_guess = np.zeros(knott_radii.size-1)
     params_guess[0] = tgrad
     
     lb = np.ones_like(params_guess)

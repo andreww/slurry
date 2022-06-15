@@ -229,7 +229,7 @@ def plot_case_setup(r_icb, r_cmb, f_layer_thickness, gruneisen_parameter,
     fig.tight_layout()  
     plt.show()
     
-def plot_case_solid_frac(analysis_radii, r_icb, r_cmb, f_layer_thickness, gruneisen_parameter, 
+def plot_case_solid_frac(analysis_radii, r_icb, r_cmb, f_layer_thickness, gruneisen_parameter, number_of_knots,
                     delta_t_icb, xfe_outer_core, xfe_icb, solid_vf, number_of_analysis_points, t_params, **kwargs):
 
     # Generate the functions for temperautre,
@@ -241,11 +241,12 @@ def plot_case_solid_frac(analysis_radii, r_icb, r_cmb, f_layer_thickness, grunei
     # Discretisation points
     nucleation_radii = np.linspace(r_icb, r_flayer_top, number_of_analysis_points)
     analysis_radii = np.linspace(r_icb, r_flayer_top, number_of_analysis_points)
+    knott_radii = np.linspace(r_icb, r_flayer_top, number_of_knots)
     
     tfunc, atfunc, ftfunc, tfunc_creator, xfunc, pfunc, \
         gfunc = flayer.setup_flayer_functions(r_icb, r_cmb, f_layer_thickness, 
                                               gruneisen_parameter, delta_t_icb,
-                                              xfe_outer_core, xfe_icb, analysis_radii)
+                                              xfe_outer_core, xfe_icb, knott_radii)
     tfunc = tfunc_creator(t_params)
 
     fig, axs = plt.subplots(ncols=2, figsize=(12,6), tight_layout=True)
