@@ -82,7 +82,7 @@ def plot_case_single_solution(index, data):
     
  
 def plot_case_csd_nuc(particle_radii, analysis_radii, partial_particle_densities,
-                      crit_nuc_radii, nucleation_rates, logscale=False, nonuc=True, **other_data):
+                      crit_nuc_radii, nucleation_rates, logscale=False, nonuc=True, nosum=True, **other_data):
 
     max_particle_radius = particle_radii[particle_radii > 0.0].max()
     min_particle_radius = particle_radii[particle_radii > 0.0].min()
@@ -90,7 +90,7 @@ def plot_case_csd_nuc(particle_radii, analysis_radii, partial_particle_densities
 
     particle_size_distributions = []
     edges = None
-    binsin = np.linspace(min_particle_radius, max_particle_radius, 20)
+    binsin = np.linspace(min_particle_radius, max_particle_radius, 10)
 
     for i, r in enumerate(analysis_radii):
         csd, edg = np.histogram(particle_radii[i,:], 
@@ -115,10 +115,11 @@ def plot_case_csd_nuc(particle_radii, analysis_radii, partial_particle_densities
         return fmttick
 
     if nonuc:
-        fig, axs = plt.subplots(nrows=2, ncols=1, figsize=(12,8), sharex='col')
+        fig, axs = plt.subplots(nrows=2, ncols=1, figsize=(12,8), sharex='col', tight_layout=True)
     else:
         fig, axs = plt.subplots(nrows=2, ncols=2, figsize=(12,8), sharex='col')
     fig.subplots_adjust(hspace=0, wspace=0.1)
+
 
     if nonuc:
         ax = axs[0]
@@ -135,7 +136,8 @@ def plot_case_csd_nuc(particle_radii, analysis_radii, partial_particle_densities
                    extent=[analysis_radii[1]/1000.0, analysis_radii[-1]/1000.0,
                            edges[0], edges[-1]])
     ax.set_ylabel('Particle radius (m)')
-    ax.set_xlabel('Radius (km)')
+    #ax.set_xlabel('Radius (km)')
+    ax.set_xlim(1221.5, 1471.5)
     #ax.set_yscale('log')
 
     cb = plt.colorbar(im, ax=ax, location='top')
@@ -147,10 +149,11 @@ def plot_case_csd_nuc(particle_radii, analysis_radii, partial_particle_densities
     else:
         ax = axs[1,0]
     ax.plot(analysis_radii[1:-1]/1000.0, csd[1:-1,:].sum(axis=1))
-
     ax.set_xlabel('Radius (km)')
     ax.set_ylabel('Total number of particles per m$^3$')
     ax.yaxis.set_major_formatter(_sciformat)
+    
+    ax.set_xlim(1221.5, 1471.5)
 
     if not nonuc:
         ax = axs[0, 1]
