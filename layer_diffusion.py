@@ -13,7 +13,8 @@ import matplotlib
 def solve_layer_diffusion(radii, sources, diffusion_coefficent, value_guess, *,
                           top_value_bc=None, top_derivative_bc=None,
                           bottom_value_bc=None, bottom_derivative_bc=None,
-                          derivative_guess=None, fig_axs=None, fig_col='k'):
+                          derivative_guess=None, fig_axs=None, fig_col='k',
+                          composition=False):
     """
     Temperature or composition profile balancing production and diffusion
     
@@ -70,8 +71,12 @@ def solve_layer_diffusion(radii, sources, diffusion_coefficent, value_guess, *,
     # size of x can change from call to call and y[1] is the row y[1,:].
     def fun(x, y):
         dy0_by_dx = y[1]
-        dy1_by_dx = (- source_fun(x) - (2.0 * diffusion_coefficent / x) * y[1]
-                    ) / diffusion_coefficent
+        if composition:
+            dy1_by_dx = (- source_fun(x)*y[0] - (2.0 * diffusion_coefficent / x) * y[1]
+                        ) / diffusion_coefficent
+        else:
+            dy1_by_dx = (- source_fun(x) - (2.0 * diffusion_coefficent / x) * y[1]
+                        ) / diffusion_coefficent
         return np.vstack((dy0_by_dx, dy1_by_dx))
     
     # Set up boundary conditions. First check we have the right number
@@ -97,7 +102,7 @@ def solve_layer_diffusion(radii, sources, diffusion_coefficent, value_guess, *,
         assert True, "Internal error in BC function setup code"
         
     # Run the solver
-    result = spi.solve_bvp(fun, bc, radii, guess)
+    result = spi.solve_bvp(fun, bc, radii, guess, verbose=2)
     
     if not result.success:
         print(f"Boundary value solver failed with status {result.status}")
