@@ -417,6 +417,7 @@ def solve_flayer(ftfunc, tfunc_creator, xfunc, pfunc, gfunc, start_time, max_tim
     # We should report the temperatures we used for the final calculation
     # (we should also report the output temperatures too, but they will match 
     # iff the convergence has converged!
+    # FIXME - do we need this? Is it why the results always look so good?
     out_t_points = tfunc(analysis_radii)
         
     return solutions, particle_densities, growth_rate, solid_vf, \
@@ -547,7 +548,7 @@ def evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
         nucleation_rates, tfunc, xfunc, pfunc, gfunc,
         start_time, max_time, crit_nuc_radii, k0, dl, mu, verbose=verbose)
     
-    
+    # Solution for latent heat and chemistry
     latent_heat = 0.75 * 1000000.0 # J/kg - from Davies 2015, could calculate this from the thermodynamics I think (FIXME). 0.75E6
     _, _, _, fe_density, _, _ = feot.densities(1.0, pfunc(analysis_radii), tfunc(analysis_radii))
     mass_production_rate = solid_volume_production_rate * fe_density
