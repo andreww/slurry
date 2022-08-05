@@ -418,7 +418,7 @@ def solve_flayer(ftfunc, tfunc_creator, xfunc, pfunc, gfunc, start_time, max_tim
     # (we should also report the output temperatures too, but they will match 
     # iff the convergence has converged!
     # FIXME - do we need this? Is it why the results always look so good?
-    out_t_points = tfunc(analysis_radii)
+    # out_t_points = tfunc(analysis_radii) No - we don't need this.
         
     return solutions, particle_densities, growth_rate, solid_vf, \
         particle_radius_unnormalised, partial_particle_densities, \
