@@ -387,7 +387,7 @@ def solve_flayer(ftfunc, tfunc_creator, xfunc, pfunc, gfunc, start_time, max_tim
                        args=(tfunc_creator, xfunc, pfunc, 
             gfunc, start_time, max_time, k0, dl, k, mu, i0, 
             surf_energy, wetting_angle, hetrogeneous_radius, nucleation_radii, 
-            analysis_radii, radius_inner_core, radius_top_flayer, t_top_flayer),
+            analysis_radii, radius_inner_core, 'temp', radius_top_flayer, t_top_flayer),
             options={'disp': True, 'xtol': 0.0001, 'ftol': 0.1}, method='Powell')
     
     if not silent:
@@ -426,17 +426,29 @@ def solve_flayer(ftfunc, tfunc_creator, xfunc, pfunc, gfunc, start_time, max_tim
         res.x
 
 
-def evaluate_flayer_wrapper_func(tparams, tfunc_creator, xfunc, pfunc, gfunc, start_time, max_time,
+def evaluate_flayer_wrapper_func(params, tfunc_creator, xfunc_creator, pfunc, gfunc, start_time, max_time,
                     k0, dl, k, mu, i0, surf_energy, wetting_angle, hetrogeneous_radius,
-                    nucleation_radii, analysis_radii, radius_inner_core, 
+                    nucleation_radii, analysis_radii, radius_inner_core, mode,
                     radius_top_flayer, t_top_flayer):
     """
     Wrapper function around evaulate_flayer which we can pass to scipy optimise
     
     returns the sum of the squared difference between tpoints and calculated temperatures
     """
-    tfunc = tfunc_creator(tparams)
-    tpoints = tfunc(analysis_radii)
+    
+    if mode == 'temp':
+        tfunc = tfunc_creator(params)
+        tpoints = tfunc(analysis_radii)
+        xfunc = xfunc_creator # Just cheat and pass in a function to use
+    elif mode == 'comp':
+        pass
+        # pass temperature function in as the creator.
+    elif mode == 'both':
+        pass
+        # break up arguments and make both functions
+    else:
+        raise ValueError('Unknown mode')
+        
     
     solutions, particle_densities, growth_rate, solid_vf, \
         particle_radius_unnormalised, partial_particle_densities, \
