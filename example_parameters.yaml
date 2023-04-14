@@ -15,3 +15,4 @@ chemical_diffusivity : 1.0e-9
 kinematic_viscosity : 1.0e-6
 thermal_conductivity : 100.0
 max_time : 1.0E20
+opt_mode : 'temp'

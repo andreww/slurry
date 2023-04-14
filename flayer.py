@@ -29,7 +29,7 @@ def flayer_case(f_layer_thickness, delta_t_icb, xfe_outer_core, xfe_icb,
                 wetting_angle=180.0, hetrogeneous_radius=None,
                 r_icb=1221.5E3, r_cmb=3480.0E3, gruneisen_parameter=1.5,
                 start_time=0.0, max_time=1.0E12, max_rel_error=1.0E-5,
-                max_absolute_error=1.0E-8, verbose=False):
+                max_absolute_error=1.0E-8, verbose=False, opt_mode='temp'):
     """
     Setup, run and analyse a non-equilibrium F-layer model
     
@@ -94,7 +94,7 @@ def flayer_case(f_layer_thickness, delta_t_icb, xfe_outer_core, xfe_icb,
     
     # Make interpolation functions for each input property (matching liquidus and
     # adiabat
-    tfunc, tafunc, ftfunc, tfunc_creator, xfunc, pfunc, gfunc = setup_flayer_functions(r_icb, r_cmb,
+    tfunc, tafunc, ftfunc, tfunc_creator, xfunc, pfunc, gfunc, xfunc_creator = setup_flayer_functions(r_icb, r_cmb,
          f_layer_thickness, gruneisen_parameter, delta_t_icb, xfe_outer_core, xfe_icb, knott_radii)
 
     
@@ -104,13 +104,13 @@ def flayer_case(f_layer_thickness, delta_t_icb, xfe_outer_core, xfe_icb,
     # doit!
     solutions, particle_densities, growth_rate, solid_vf, \
         particle_radius_unnormalised, partial_particle_densities, opt_xlfunc, \
-        crit_nuc_radii, nucleation_rates, out_x_points, out_t_points, t_params = solve_flayer(ftfunc, tfunc_creator, xfunc, 
+        crit_nuc_radii, nucleation_rates, out_x_points, out_t_points, t_params = solve_flayer(ftfunc, tfunc_creator, xfunc, xfunc_creator, 
         pfunc, gfunc, start_time, max_time, growth_prefactor, 
         chemical_diffusivity, thermal_conductivity, kinematic_viscosity, i0, surf_energy,
         wetting_angle, hetrogeneous_radius,
         nucleation_radii, analysis_radii, knott_radii, r_icb, 
         r_flayer_top, t_flayer_top, max_rel_error=max_rel_error, max_absolute_error=max_absolute_error,
-                                                                                 verbose=verbose)
+                                                                                 verbose=verbose, opt_mode=opt_mode)
 
 
     # Post-solution analysis
@@ -205,6 +205,14 @@ def setup_flayer_functions(r_icb, r_cmb, f_layer_thickness, gruneisen_parameter,
     tfunc_blank_params = np.zeros(knott_radii.size-1)
     tfunc_blank_params[0] = t_grad_flayer
     flayer_temperature_function = t_func_creator(tfunc_blank_params)
+    
+    # And composition. Input setup is slightly different
+    x_func_creator = make_new_x_func_creator(r_flayer_top, r_icb, xfe_outer_core, knott_radii)
+    xfunc_blank_params = np.zeros(knott_radii.size-1)
+    x_grad = (xfe_outer_core - xfe_icb) / f_layer_thickness
+    xfunc_blank_params[0] = x_grad
+    flayer_composition_function = x_func_creator(xfunc_blank_params)
+    
     @np.vectorize
     def temperature_function(r):
         if r >= r_cmb:
@@ -222,8 +230,7 @@ def setup_flayer_functions(r_icb, r_cmb, f_layer_thickness, gruneisen_parameter,
         if r > r_flayer_top:
             xfe = xfe_outer_core
         else:
-            xfe = xfe_icb + (r - r_icb)*(
-                (xfe_outer_core-xfe_icb)/(r_flayer_top-r_icb))
+            xfe = flayer_composition_function(r)
         return xfe
     
     @np.vectorize           
@@ -240,7 +247,7 @@ def setup_flayer_functions(r_icb, r_cmb, f_layer_thickness, gruneisen_parameter,
     
     return temperature_function, adiabatic_temperature_function, flayer_temperature_function, \
         t_func_creator, composition_function, \
-        pressure_function, gravity_function
+        pressure_function, gravity_function, x_func_creator
 
 
 def make_new_t_func_creator(radius_top_flayer, r_icb, t_top_flayer, knott_radii):
@@ -298,11 +305,64 @@ def make_new_t_func_creator(radius_top_flayer, r_icb, t_top_flayer, knott_radii)
     return t_func_creator
 
 
-def solve_flayer(ftfunc, tfunc_creator, xfunc, pfunc, gfunc, start_time, max_time,
+def make_new_x_func_creator(radius_top_flayer, r_icb, x_top_flayer, knott_radii):
+    """
+    Create composition function creator from model setup
+    
+    The idea is that this is called using the general parameters
+    of the F-layer that remain fixed in any given model run. It
+    returns a function that accepts a set of composition parameters
+    that, when called, returns a cublic spline representation of the
+    composition through the F-layer. This may be one too many layers of
+    abstraction, but this way the raw composition function (which is
+    returned by the function that is returned by this function) is
+    quick to evaluate and can easily be updated inside a optimisation
+    loop.
+    
+    Arguments to this function are:
+    
+    radius_top_f_layer: in m
+    r_icb: in m
+    x_top_flayer: this will be fixed for all composition models, in mol frac Fe
+    knott_radii: the set of N points where the cubic spline knots will be
+        located. This should include the ICB and 
+        the top of the F-layer.
+        
+    Returns a function which returns a cubic spline represnetation of the
+    composition when called. This takes a single array of N-1 parameters
+    which have the following meaning:
+    
+    parameters[0]: composition gradient in mol-frac/m, should be negative (gets 
+        more oxygen rich do downwards) and probably small 
+    parameters[1:N-1]: composition purtubations (in mol frac) at each analysis radus
+        other than the inner boundary and the outer boundary.
+        
+    The returned cubic spline is forced to have zero gradient at the ICB and
+    zero second derivative at the top of the F-layer. The composition at the
+    ICB is set by the overall composition gradient. The composition at the top
+    of the F-layer cannot be changed once set. This setup matches the 'natural'
+    boundary conditions of the compositional problem, but will need to be changed if
+    we allow direct freezing at the ICB.
+    """
+    
+    layer_thickness = radius_top_flayer - r_icb
+    
+    def x_func_creator(params):
+        # params contains dt_dr and a Dt for each point not at the ends 
+        assert params.shape[0] == knott_radii.shape[0] - 1, "params radii mismatch"
+        dx_dr = params[0]
+        x_points = x_top_flayer - (radius_top_flayer - knott_radii) * dx_dr
+        x_points[1:-1] = x_points[1:-1] + params[1:]
+        return spi.CubicSpline(knott_radii, x_points, bc_type=((1, 0.0), (2, 0.0)))
+    
+    return x_func_creator
+
+
+def solve_flayer(ftfunc, tfunc_creator, xfunc, xfunc_creator, pfunc, gfunc, start_time, max_time,
                 k0, dl, k, mu, i0, surf_energy, wetting_angle, hetrogeneous_radius,
                 nucleation_radii, analysis_radii, knott_radii, radius_inner_core, 
                 radius_top_flayer, t_top_flayer, max_rel_error=1.0E-7, max_absolute_error=1.0E-10,
-                verbose=False, silent=False):
+                verbose=False, silent=False, opt_mode='temp'):
     """
     Create a self consistent solution for the F-layer assuming non-equilibrium growth and falling
     of iron crystals
@@ -372,22 +432,53 @@ def solve_flayer(ftfunc, tfunc_creator, xfunc, pfunc, gfunc, start_time, max_tim
     # So we need to build these for the initial guess
     t_icb_init = ftfunc(radius_inner_core)
     tgrad = (t_top_flayer - t_icb_init) / (radius_top_flayer - radius_inner_core)
-    params_guess = np.zeros(knott_radii.size-1)
-    params_guess[0] = tgrad
+    t_params_guess = np.zeros(knott_radii.size-1)
+    t_params_guess[0] = tgrad
     
-    lb = np.ones_like(params_guess)
-    lb[0] = 10.0*params_guess[0]
-    lb[1:] = -25.0
-    ub = np.ones_like(params_guess)
-    ub[0] = 0.0
-    ub[1:] = 25.0
-    param_bounds = spo.Bounds(lb, ub)
+    # Bounds for temperature
+    lbt = np.ones_like(t_params_guess)
+    lbt[0] = 10.0*t_params_guess[0]
+    lbt[1:] = -25.0
+    ubt = np.ones_like(t_params_guess)
+    ubt[0] = 0.0
+    ubt[1:] = 25.0
+    
+    # Initial composition parameters
+    x_icb_init = xfunc(radius_inner_core)
+    x_top_flayer = xfunc(radius_top_flayer)
+    xgrad = (x_top_flayer - x_icb_init) / (radius_top_flayer - radius_inner_core)
+    x_params_guess = np.zeros(knott_radii.size-1)
+    x_params_guess[0] = xgrad
+    
+    # Bounds for composition
+    lbx = np.ones_like(x_params_guess)
+    lbx[0] = -1.0 / (radius_top_flayer - radius_inner_core)
+    lbx[1:] = -0.1
+    ubx = np.ones_like(t_params_guess)
+    ubx[0] = 1.0 / (radius_top_flayer - radius_inner_core)
+    ubx[1:] = 0.1
+    
+    if opt_mode == 'temp':
+        params_guess = t_params_guess
+        param_bounds = spo.Bounds(lbt, ubt)
+        xfunc_creator = xfunc # we don't need to pass in the generator
+    elif opt_mode == 'comp':
+        params_guess = x_params_guess
+        param_bounds = spo.Bounds(lbx, ubx)
+        tfunc_creator = ftfunc
+    elif opt_mode == 'both':
+        params_guess = np.concatenate((t_params_guess, x_params_guess))
+        param_bounds = spo.Bounds(np.concatenate((lbt,lbx)), 
+                                  np.concatenate((ubt,ubx)))
+    else:
+        raise ValueError('Unknown mode')
+    
     
     res = spo.minimize(evaluate_flayer_wrapper_func, params_guess, bounds=param_bounds, 
-                       args=(tfunc_creator, xfunc, pfunc, 
+                       args=(tfunc_creator, xfunc_creator, pfunc, 
             gfunc, start_time, max_time, k0, dl, k, mu, i0, 
             surf_energy, wetting_angle, hetrogeneous_radius, nucleation_radii, 
-            analysis_radii, radius_inner_core, 'temp', radius_top_flayer, t_top_flayer),
+            analysis_radii, radius_inner_core, opt_mode, knott_radii.size-1, radius_top_flayer, t_top_flayer),
             options={'disp': True, 'xtol': 0.0001, 'ftol': 0.1}, method='Powell')
     
     if not silent:
@@ -428,7 +519,7 @@ def solve_flayer(ftfunc, tfunc_creator, xfunc, pfunc, gfunc, start_time, max_tim
 
 def evaluate_flayer_wrapper_func(params, tfunc_creator, xfunc_creator, pfunc, gfunc, start_time, max_time,
                     k0, dl, k, mu, i0, surf_energy, wetting_angle, hetrogeneous_radius,
-                    nucleation_radii, analysis_radii, radius_inner_core, mode,
+                    nucleation_radii, analysis_radii, radius_inner_core, mode, n_params,
                     radius_top_flayer, t_top_flayer):
     """
     Wrapper function around evaulate_flayer which we can pass to scipy optimise
@@ -439,12 +530,18 @@ def evaluate_flayer_wrapper_func(params, tfunc_creator, xfunc_creator, pfunc, gf
     if mode == 'temp':
         tfunc = tfunc_creator(params)
         tpoints = tfunc(analysis_radii)
-        xfunc = xfunc_creator # Just cheat and pass in a function to use
+        xfunc = xfunc_creator # No building needed
     elif mode == 'comp':
-        pass
+        xfunc = xfunc_creator(params)
+        tfunc = tfunc_creator
+        tpoints = tfunc(analysis_radii)
         # pass temperature function in as the creator.
     elif mode == 'both':
-        pass
+        t_params = params[:n_params]
+        x_params = params[n_params:]
+        tfunc = tfunc_creator(t_params)
+        tpoints = tfunc(analysis_radii)
+        xfunc = xfunc_creator(x_params)
         # break up arguments and make both functions
     else:
         raise ValueError('Unknown mode')
