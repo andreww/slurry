@@ -531,10 +531,12 @@ def evaluate_flayer_wrapper_func(params, tfunc_creator, xfunc_creator, pfunc, gf
         tfunc = tfunc_creator(params)
         tpoints = tfunc(analysis_radii)
         xfunc = xfunc_creator # No building needed
+        xl_points_in = xfunc(analysis_radii)
     elif mode == 'comp':
         xfunc = xfunc_creator(params)
         tfunc = tfunc_creator
         tpoints = tfunc(analysis_radii)
+        xl_points_in = xfunc(analysis_radii)
         # pass temperature function in as the creator.
     elif mode == 'both':
         t_params = params[:n_params]
@@ -542,6 +544,7 @@ def evaluate_flayer_wrapper_func(params, tfunc_creator, xfunc_creator, pfunc, gf
         tfunc = tfunc_creator(t_params)
         tpoints = tfunc(analysis_radii)
         xfunc = xfunc_creator(x_params)
+        xl_points_in = xfunc(analysis_radii)
         # break up arguments and make both functions
     else:
         raise ValueError('Unknown mode')
@@ -549,16 +552,18 @@ def evaluate_flayer_wrapper_func(params, tfunc_creator, xfunc_creator, pfunc, gf
     
     solutions, particle_densities, growth_rate, solid_vf, \
         particle_radius_unnormalised, partial_particle_densities, \
-        crit_nuc_radii, nucleation_rates, t_points_out, xl_points = \
+        crit_nuc_radii, nucleation_rates, t_points_out, xl_points_out = \
             evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
                     k0, dl, k, mu, i0, surf_energy, wetting_angle, hetrogeneous_radius,
                     nucleation_radii, analysis_radii, radius_inner_core, 
                     radius_top_flayer, verbose=False, silent=False)
     
-    sse = np.sqrt(np.sum((tpoints - t_points_out)**2)/len(analysis_radii))
+    sset = np.sqrt(np.sum((tpoints - t_points_out)**2)/len(analysis_radii))
+    ssex = np.sqrt(np.sum((xl_points_in - xl_points_out)**2)/len(analysis_radii))
     # Should be in callback: 
-    print(f"Mean abs error = {sse:4g} (K)")
-    return sse
+    print(f"Mean abs temperature error = {sset:4g} (K)")
+    print(f"Mean abs composition error = {ssex:4g} (mol frac Fe)")
+    return (sset + ssex)/2.0
     
 
 def evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
@@ -657,39 +662,52 @@ def evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
         nucleation_rates, tfunc, xfunc, pfunc, gfunc,
         start_time, max_time, crit_nuc_radii, k0, dl, mu, verbose=verbose)
     
-    # Solution for latent heat and chemistry
+    # Solution for latent heat
+
     latent_heat = 0.75 * 1000000.0 # J/kg - from Davies 2015, could calculate this from the thermodynamics I think (FIXME). 0.75E6
     _, _, _, fe_density, _, _ = feot.densities(1.0, pfunc(analysis_radii), tfunc(analysis_radii))
     mass_production_rate = solid_volume_production_rate * fe_density
     heat_production_rate = mass_production_rate * latent_heat
-    # Here we should calculate the updated composion. For now just return input so we can test without self consistent loop
-    # FIXME!
     top_bc = tfunc(analysis_radii[-1])
     bottom_bc = 0.0
     if verbose or (not silent):
         print("Finding T to match heat production rate")
         print(f"Boundary conditions, top: {top_bc} K, bottom {bottom_bc} K/m")
-        print("Radius (km), P (GPa), Guess T (K), dm/dt (kg/s), Q (W/m^3), Calculated T (K)")
     t_points_out = layer_diffusion.solve_layer_diffusion(analysis_radii, heat_production_rate, 
                                                          100.0, tfunc(analysis_radii),
                                                          top_value_bc=top_bc,
                                                          bottom_derivative_bc=bottom_bc)
+    
+
+    # Solution for chemistry
+    top_x_bc = xfunc(analysis_radii[-1])
+    c_top = feot.mass_percent_o(top_x_bc)/100.0
+    c_bottom = 0.0
+    initial_c = feot.mass_percent_o(xfunc(analysis_radii))/100.0
+    source_rate = initial_c * mass_production_rate
+    if verbose or (not silent):
+        print("Finding X to oxygen production rate")
+        print(f"Boundary conditions, top: {c_top} kg(?), bottom {c_bottom} kg(?)/m")
+    c_points_out = layer_diffusion.solve_layer_diffusion(analysis_radii, source_rate, 
+                                                         dl, initial_c,
+                                                         top_value_bc=c_top,
+                                                         bottom_derivative_bc=c_bottom)
+    xl_points_out = feot.mol_frac_fe(c_points_out * 100.0)
+    
+    # Report
     if verbose or (not silent and len(analysis_radii) <= 10):
+        print("Radius (km), P (GPa), Guess T (K), Guess X, dm/dt (kg/s), Q (W/m^3), O prod rate, Calculated T (K), Calculated X")
         for i, r in enumerate(analysis_radii):
-            print(f"{r/1000.0:4g} {pfunc(r):3g} {tfunc(r):4g} {mass_production_rate[i]:.3g} {heat_production_rate[i]:.3g} {t_points_out[i]:4g}")
+            print(f"{r/1000.0:4g} {pfunc(r):3g} {tfunc(r):4g} {xfunc(r):4g} {mass_production_rate[i]:.3g} {heat_production_rate[i]:.3g} {source_rate[i]:.3g} {t_points_out[i]:4g} {xl_points_out[i]:4g}")
     elif not silent:
+        print("Radius (km), P (GPa), Guess T (K), Guess X, dm/dt (kg/s), Q (W/m^3), O prod rate, Calculated T (K), Calculated X")
         for i, r in enumerate(analysis_radii):
             if i%(len(analysis_radii)//10) == 0: 
-                print(f"{r/1000.0:4g} {pfunc(r):3g} {tfunc(r):4g} {mass_production_rate[i]:.3g} {heat_production_rate[i]:.3g} {t_points_out[i]:4g}")     
-              
-              
-    xl_points = xfunc(analysis_radii)
-    if not silent:
-        print("NOT doing the diffusion calculation for composition")
+                print(f"{r/1000.0:4g} {pfunc(r):3g} {tfunc(r):4g} {xfunc(r):4g} {mass_production_rate[i]:.3g} {heat_production_rate[i]:.3g} {source_rate[i]:.3g} {t_points_out[i]:4g} {xl_points_out[i]:4g}")     
         
     return solutions, particle_densities, growth_rate, solid_vf, \
         particle_radius_unnormalised, partial_particle_densities, \
-        crit_nuc_radii, nucleation_rates, t_points_out, xl_points
+        crit_nuc_radii, nucleation_rates, t_points_out, xl_points_out
 
 
 def analyse_flayer(solutions, integration_radii, analysis_radii, nucleation_rates, radius_inner_core,
