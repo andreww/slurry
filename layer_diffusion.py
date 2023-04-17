@@ -14,7 +14,7 @@ def solve_layer_diffusion(radii, sources, diffusion_coefficent, value_guess, *,
                           top_value_bc=None, top_derivative_bc=None,
                           bottom_value_bc=None, bottom_derivative_bc=None,
                           derivative_guess=None, fig_axs=None, fig_col='k',
-                          composition=False):
+                          composition=False, composition_plot=False):
     """
     Temperature or composition profile balancing production and diffusion
     
@@ -137,10 +137,16 @@ def solve_layer_diffusion(radii, sources, diffusion_coefficent, value_guess, *,
             fig_axs[1].plot(radii[0]/1000.0, bottom_derivative_bc, 'ro')
             
         fig_axs[0].set_xlabel('$R$ (km)')
-        fig_axs[0].set_ylabel('$T(R)$ (K)')
         fig_axs[1].set_xlabel('$R$ (km)')
-        fig_axs[1].set_ylabel('$\mathrm{d}T / \mathrm{d}R$ (K/m)')
         fig_axs[2].set_xlabel('$R$ (km)')
-        fig_axs[2].set_ylabel('$Q(R)$ (W/m$^3$)')
         
+        if composition_plot:
+            fig_axs[0].set_ylabel('$c(R)$ (?)')
+            fig_axs[1].set_ylabel('$\mathrm{d}c / \mathrm{d}R$ (?)')
+            fig_axs[2].set_ylabel('$c(R)m^s(R)$ (kg/m$^3$??)')
+        else:
+            fig_axs[0].set_ylabel('$T(R)$ (K)')
+            fig_axs[1].set_ylabel('$\mathrm{d}T / \mathrm{d}R$ (K/m)')
+            fig_axs[2].set_ylabel('$Q(R)$ (W/m$^3$)')
+            
     return result.sol(radii)[0]
