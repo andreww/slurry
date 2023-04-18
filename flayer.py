@@ -452,11 +452,11 @@ def solve_flayer(ftfunc, tfunc_creator, xfunc, xfunc_creator, pfunc, gfunc, star
     
     # Bounds for composition
     lbx = np.ones_like(x_params_guess)
-    lbx[0] = -1.0 / (radius_top_flayer - radius_inner_core)
-    lbx[1:] = -0.1
+    lbx[0] = -1.0E-6 / (radius_top_flayer - radius_inner_core)
+    lbx[1:] = -0.1E-8
     ubx = np.ones_like(t_params_guess)
-    ubx[0] = 1.0 / (radius_top_flayer - radius_inner_core)
-    ubx[1:] = 0.1
+    ubx[0] = 1.0E-6 / (radius_top_flayer - radius_inner_core)
+    ubx[1:] = 0.1E-8
     
     if opt_mode == 'temp':
         params_guess = t_params_guess
@@ -580,7 +580,7 @@ def evaluate_flayer_wrapper_func(params, tfunc_creator, xfunc_creator, pfunc, gf
         # Errors already caught. Must be 'both'
         sse = (sset + ssex)/2.0
     print(f"Mean abs error for solver = {sse:4g}")
-    return 
+    return sse
     
 
 def evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
