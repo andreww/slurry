@@ -467,13 +467,20 @@ def solve_flayer(ftfunc, tfunc_creator, xfunc, xfunc_creator, pfunc, gfunc, star
         param_bounds = spo.Bounds(lbx, ubx)
         tfunc_creator = ftfunc
     elif opt_mode == 'both':
-        params_guess = np.concatenate((t_params_guess, x_params_guess))
-        param_bounds = spo.Bounds(np.concatenate((lbt,lbx)), 
-                                  np.concatenate((ubt,ubx)))
+        # For the 'both' case we order the parameters so they go
+        # grad of temp, grad of comp, then all the dts then all the dxs
+        # this is because that's the order we want a powell solver to 
+        # do line searches in...
+        params_guess = np.concatenate((t_params_guess[0:1], x_params_guess[0:1],
+                                       t_params_guess[1:], x_params_guess[1:]))
+        param_bounds = spo.Bounds(np.concatenate((lbt[0:1],lbx[0:1],lbt[1:],lbx[1:])), 
+                                  np.concatenate((ubt[0:1],ubx[0:1],ubt[1:],ubx[1:])))
+        
     else:
         raise ValueError('Unknown mode')
     
-    
+    print(f"Params_guess = {params_guess}")
+    print(f"Params_bounds = {param_bounds}")
     res = spo.minimize(evaluate_flayer_wrapper_func, params_guess, bounds=param_bounds, 
                        args=(tfunc_creator, xfunc_creator, pfunc, 
             gfunc, start_time, max_time, k0, dl, k, mu, i0, 
@@ -492,6 +499,7 @@ def solve_flayer(ftfunc, tfunc_creator, xfunc, xfunc_creator, pfunc, gfunc, star
         print("***************************************************************************")
     
     
+    # FIXME - need to hadle X too!!!
     # Function of self consistent temperatures
     tfunc = tfunc_creator(res.x)
     
@@ -526,7 +534,7 @@ def evaluate_flayer_wrapper_func(params, tfunc_creator, xfunc_creator, pfunc, gf
     
     returns the sum of the squared difference between tpoints and calculated temperatures
     """
-    
+    print(f"Wrapper called with {params}")
     if mode == 'temp':
         tfunc = tfunc_creator(params)
         tpoints = tfunc(analysis_radii)
@@ -539,12 +547,13 @@ def evaluate_flayer_wrapper_func(params, tfunc_creator, xfunc_creator, pfunc, gf
         xl_points_in = xfunc(analysis_radii)
         # pass temperature function in as the creator.
     elif mode == 'both':
-        t_params = params[:n_params]
-        x_params = params[n_params:]
+        t_params = np.concatenate((params[0:1], params[2:n_params+1]))
+        x_params = np.concatenate((params[1:2], params[n_params+1:]))
         tfunc = tfunc_creator(t_params)
         tpoints = tfunc(analysis_radii)
         xfunc = xfunc_creator(x_params)
         xl_points_in = xfunc(analysis_radii)
+        
         # break up arguments and make both functions
     else:
         raise ValueError('Unknown mode')
@@ -563,7 +572,15 @@ def evaluate_flayer_wrapper_func(params, tfunc_creator, xfunc_creator, pfunc, gf
     # Should be in callback: 
     print(f"Mean abs temperature error = {sset:4g} (K)")
     print(f"Mean abs composition error = {ssex:4g} (mol frac Fe)")
-    return (sset + ssex)/2.0
+    if mode == 'temp':
+        sse = sset
+    elif mode == 'comp':
+        sse = ssex
+    else:
+        # Errors already caught. Must be 'both'
+        sse = (sset + ssex)/2.0
+    print(f"Mean abs error for solver = {sse:4g}")
+    return 
     
 
 def evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
