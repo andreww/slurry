@@ -34,7 +34,7 @@ def run_flayer_case(input_data, filename=None):
     
     solutions, analysis_radii, particle_densities, calculated_seperation, solid_vf, \
         particle_radii, partial_particle_densities, growth_rate, crit_nuc_radii, nucleation_rates, \
-        vf_ratio, out_x_points, out_t_points, t_params = flayer.flayer_case(**input_data)
+        vf_ratio, out_x_points, out_t_points, opt_params = flayer.flayer_case(**input_data)
     
     output_data = dict(input_data)
     
@@ -51,7 +51,7 @@ def run_flayer_case(input_data, filename=None):
     output_data["vf_ratio"] = vf_ratio
     output_data["out_x_points"] = out_x_points
     output_data["out_t_points"] = out_t_points
-    output_data["t_params"] = t_params
+    output_data["opt_params"] = opt_params
     
     if filename is not None:
         with open(filename, 'wb') as f:

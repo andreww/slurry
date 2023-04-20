@@ -103,8 +103,9 @@ def flayer_case(f_layer_thickness, delta_t_icb, xfe_outer_core, xfe_icb,
     
     # doit!
     solutions, particle_densities, growth_rate, solid_vf, \
-        particle_radius_unnormalised, partial_particle_densities, opt_xlfunc, \
-        crit_nuc_radii, nucleation_rates, out_x_points, out_t_points, t_params = solve_flayer(ftfunc, tfunc_creator, xfunc, xfunc_creator, 
+        particle_radius_unnormalised, partial_particle_densities, \
+        crit_nuc_radii, nucleation_rates, out_x_points, out_t_points, \
+        opt_tfunc, opt_xfunc, opt_params, n_params = solve_flayer(ftfunc, tfunc_creator, xfunc, xfunc_creator, 
         pfunc, gfunc, start_time, max_time, growth_prefactor, 
         chemical_diffusivity, thermal_conductivity, kinematic_viscosity, i0, surf_energy,
         wetting_angle, hetrogeneous_radius,
@@ -114,18 +115,17 @@ def flayer_case(f_layer_thickness, delta_t_icb, xfe_outer_core, xfe_icb,
 
 
     # Post-solution analysis
-    xfunc = spi.interp1d(analysis_radii, out_x_points, fill_value='extrapolate')
-    tfunc = tfunc_creator(t_params)
     calculated_seperation, growth_rate, vf_ratio = analyse_flayer(solutions, 
                    nucleation_radii, analysis_radii, nucleation_rates, r_icb,
                    particle_densities, growth_rate, solid_vf,
-                   particle_radius_unnormalised, partial_particle_densities, tfunc, xfunc, 
+                   particle_radius_unnormalised, partial_particle_densities, 
+                   opt_tfunc, opt_xfunc, 
                    pfunc, verbose=verbose)
     
     
     return solutions, analysis_radii, particle_densities, calculated_seperation, solid_vf, \
         particle_radius_unnormalised, partial_particle_densities, growth_rate, crit_nuc_radii, nucleation_rates, \
-        vf_ratio, out_x_points, out_t_points, t_params
+        vf_ratio, out_x_points, out_t_points, opt_params
 
 
 def setup_flayer_functions(r_icb, r_cmb, f_layer_thickness, gruneisen_parameter, delta_t_icb,
@@ -486,7 +486,7 @@ def solve_flayer(ftfunc, tfunc_creator, xfunc, xfunc_creator, pfunc, gfunc, star
             gfunc, start_time, max_time, k0, dl, k, mu, i0, 
             surf_energy, wetting_angle, hetrogeneous_radius, nucleation_radii, 
             analysis_radii, radius_inner_core, opt_mode, knott_radii.size-1, radius_top_flayer, t_top_flayer),
-            options={'disp': True, 'xtol': 0.0001, 'ftol': 0.1}, method='Powell')
+            options={'disp': True, 'xtol': 0.0001, 'ftol': 0.1, 'maxiter':40, 'maxfev':3}, method='Powell')
     
     if not silent:
         print("Powell optimisation done. Results are:")
@@ -499,9 +499,31 @@ def solve_flayer(ftfunc, tfunc_creator, xfunc, xfunc_creator, pfunc, gfunc, star
         print("***************************************************************************")
     
     
-    # FIXME - need to hadle X too!!!
-    # Function of self consistent temperatures
-    tfunc = tfunc_creator(res.x)
+    # Unpack optimised parameters
+    n_params = knott_radii.size-1
+    print(f"Optimised parameters are {res.x}")
+    if opt_mode == 'temp':
+        tfunc = tfunc_creator(res.x)
+        tpoints = tfunc(analysis_radii)
+        xfunc = xfunc_creator # No building needed
+        xl_points_in = xfunc(analysis_radii)
+    elif opt_mode == 'comp':
+        xfunc = xfunc_creator(res.x)
+        tfunc = tfunc_creator
+        tpoints = tfunc(analysis_radii)
+        xl_points_in = xfunc(analysis_radii)
+        # pass temperature function in as the creator.
+    elif opt_mode == 'both':
+        t_params = np.concatenate((res.x[0:1], res.x[2:n_params+1]))
+        x_params = np.concatenate((res.x[1:2], res.x[n_params+1:]))
+        tfunc = tfunc_creator(t_params)
+        tpoints = tfunc(analysis_radii)
+        xfunc = xfunc_creator(x_params)
+        xl_points_in = xfunc(analysis_radii)
+        
+        # break up arguments and make both functions
+    else:
+        raise ValueError('Unknown mode')
     
     # Do calculation for self conssitent location
     if not silent:
@@ -516,13 +538,11 @@ def solve_flayer(ftfunc, tfunc_creator, xfunc, xfunc_creator, pfunc, gfunc, star
     # We should report the temperatures we used for the final calculation
     # (we should also report the output temperatures too, but they will match 
     # iff the convergence has converged!
-    # FIXME - do we need this? Is it why the results always look so good?
-    # out_t_points = tfunc(analysis_radii) No - we don't need this.
         
     return solutions, particle_densities, growth_rate, solid_vf, \
         particle_radius_unnormalised, partial_particle_densities, \
-        xfunc, crit_nuc_radii, nucleation_rates, out_x_points, out_t_points, \
-        res.x
+        crit_nuc_radii, nucleation_rates, out_x_points, out_t_points, \
+        tfunc, xfunc, res.x, n_params
 
 
 def evaluate_flayer_wrapper_func(params, tfunc_creator, xfunc_creator, pfunc, gfunc, start_time, max_time,
