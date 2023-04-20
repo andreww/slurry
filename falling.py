@@ -260,6 +260,8 @@ def dimensionless_numbers(radius, re, falling_velocity, kinematic_viscosity, che
 
 
 def _fzhang_re_cd(u, r, mu):
+    # NB: the HTML rendering of Zhang equations is wrong. Check the PDF to get
+    # the numbers below. Checked against Clift's paper (see citations in paper)
     Re  = np.abs(2*r * u / mu)                                              # Eqn 1  of ZX02
     Cd  = (24.0/Re) * (1.0 + 0.15*Re**0.687) + 0.42/(1.0 + 42500*Re**-1.16) # Eqn 19 of ZX02
     return Re, Cd
