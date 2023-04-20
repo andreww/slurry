@@ -714,7 +714,13 @@ def evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
                                                          100.0, tfunc(analysis_radii),
                                                          top_value_bc=top_bc,
                                                          bottom_derivative_bc=bottom_bc)
-    
+
+    #print(f"volume production rate {solid_volume_production_rate}")
+    #print(f"mass production rate {mass_production_rate}")
+    #print(f"t_points_out {t_points_out}")
+    #print(f"heat_production_rate {heat_production_rate}")
+    #print(f"initial_t {tfunc(analysis_radii)}")
+    #print(f"k {100}")
 
     # Solution for chemistry
     top_x_bc = xfunc(analysis_radii[-1])
@@ -722,13 +728,19 @@ def evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
     c_bottom = 0.0
     initial_c = feot.mass_percent_o(xfunc(analysis_radii))/100.0
     source_rate = initial_c * mass_production_rate
+    dl = 1.0E-6
+    print(f"With fake DL={dl}")
     if verbose or (not silent):
         print("Finding X to oxygen production rate")
         print(f"Boundary conditions, top: {c_top} kg(?), bottom {c_bottom} kg(?)/m")
     c_points_out = layer_diffusion.solve_layer_diffusion(analysis_radii, source_rate, 
-                                                         dl, initial_c,
+                                                         dl*np.mean(fe_density), initial_c,
                                                          top_value_bc=c_top,
                                                          bottom_derivative_bc=c_bottom)
+    #print(f"c_points_out {c_points_out}")
+    #print(f"source_rate {source_rate}")
+    #print(f"initial_c {initial_c}")
+    #print(f"dl rho {dl*np.mean(fe_density)}")
     xl_points_out = feot.mol_frac_fe(c_points_out * 100.0)
     
     # Report
