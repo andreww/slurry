@@ -700,15 +700,35 @@ def evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
         print(f"Finding {len(analysis_radii)} IVP solutions")
     # Calculate an initial guess using the provided liquid compositioon
     solutions, particle_densities, growth_rate, solid_vf, \
-        particle_radius_unnormalised, partial_particle_densities, solid_volume_production_rate = integrate_snow_zone(
+        particle_radius_unnormalised, partial_particle_densities, \
+        solid_volume_production_rate, mean_particle_velocities = integrate_snow_zone(
         analysis_radii, radius_inner_core, radius_top_flayer, nucleation_radii, 
         nucleation_rates, tfunc, xfunc, pfunc, gfunc,
         start_time, max_time, crit_nuc_radii, k0, dl, mu, verbose=verbose)
     
+    liquid_density, _, _, fe_density, _, _ = feot.densities(xfunc(analysis_radii),
+                                                            pfunc(analysis_radii),
+                                                            tfunc(analysis_radii))
+    
+    # Calculate solid flux term - del rho u phi
+    solid_mass_fraction = (fe_density * solid_vf) / (fe_density * solid_vf +
+                                                     liquid_density * (1.0 - solid_vf))
+    print("Calculating solid flux term thingy")
+    print(f"solid mass fraction: {solid_mass_fraction}")
+    print(f"mean velocities: {mean_particle_velocities}")
+    print(f"solid densities: {fe_density}")
+    print(f"r : {analysis_radii}")
+    
+    function_to_finite_difference = analysis_radii**2 * fe_density * \
+                                    mean_particle_velocities * solid_mass_fraction
+    
+    flux_term = (1.0 / analysis_radii**2) * np.gradient(function_to_finite_difference,
+                                                        analysis_radii)
+    print(f"flux term: {flux_term}")
+    
     # Solution for latent heat
 
     latent_heat = 0.75 * 1000000.0 # J/kg - from Davies 2015, could calculate this from the thermodynamics I think (FIXME). 0.75E6
-    _, _, _, fe_density, _, _ = feot.densities(1.0, pfunc(analysis_radii), tfunc(analysis_radii))
     mass_production_rate = solid_volume_production_rate * fe_density
     heat_production_rate = mass_production_rate * latent_heat
     top_bc = tfunc(analysis_radii[-1])
@@ -854,7 +874,7 @@ def partial_particle_density(ivp_solution, event_index, nucleation_rate, nucleat
     if ivp_solution is None:
         if verbose:
             print("No ivp solution - particle not formed")
-        return 0.0, 0.0
+        return 0.0, 0.0, 0.0
     
     # Calculate the average time between nucleation events, this is the 'waiting time'
     # of Davies et al. 2019 and includes a factor of 1/2 to account for half of the 
@@ -887,26 +907,31 @@ def partial_particle_density(ivp_solution, event_index, nucleation_rate, nucleat
         if (analysis_time - tau) > 0.0:
             distance_above = ivp_solution.sol(analysis_time - tau)[1] - analysis_radius
             radius_before = ivp_solution.sol(analysis_time - delta_t)[0]
+            travel_time = tau
         elif (analysis_time - delta_t) > 0.0:
             distance_above = ((ivp_solution.sol(analysis_time - delta_t)[1] - analysis_radius) / delta_t) * tau
             radius_before = ivp_solution.sol(analysis_time - delta_t)[0]
+            travel_time = delta_t
         else:
             if verbose:
                 print("cannot process if next particle has yet to form")
-            return 0.0, 0.0
+            return 0.0, 0.0, 0.0
         if (analysis_time + tau) < ivp_solution.t[-1]:
             distance_below = analysis_radius - ivp_solution.sol(analysis_time + tau)[1]
             radius_after = ivp_solution.sol(analysis_time + delta_t)[0]
+            travel_time = travel_time + tau
         elif (analysis_time + delta_t) < ivp_solution.t[-1]:
             distance_below = ((analysis_radius - ivp_solution.sol(analysis_time + delta_t)[1]) / delta_t) * tau
             radius_after = ivp_solution.sol(analysis_time + delta_t)[0]
+            travel_time = travel_time + delta_t
         else:
             if verbose:
                 print("cannot process if previous particle has gone")
-            return 0.0, 0.0
+            return 0.0, 0.0, 0.0
         s_v = (0.5 * (distance_below + distance_above))
         particle_volume_growth_rate = ((4/3) * np.pi * (radius_after**3 - radius_before**3)) / (2.0 * delta_t) 
         partial_density = 1/(analysis_area * s_v) # /m^3 - see notebook!
+        particle_velocity = (distance_below + distance_above) / travel_time
         if verbose:
             print("Nucleation rate = ", nucleation_rate, "nuc_vol = ", nucleation_volume)
             print("At time t = ", analysis_time, "s, and tau = ", tau, "s")
@@ -919,10 +944,11 @@ def partial_particle_density(ivp_solution, event_index, nucleation_rate, nucleat
         # partial density is zero
         partial_density = 0.0
         particle_volume_growth_rate = 0.0
+        particle_velocity = 0.0
         if verbose:
             print("No event data (e.g. dissolved) so partical density is zero")
         
-    return partial_density, particle_volume_growth_rate
+    return partial_density, particle_volume_growth_rate, particle_velocity
 
 
 # Total particle density and solid volume fraction calculation
@@ -937,6 +963,7 @@ def evaluate_partcle_densities(solutions, analysis_depths, integration_depths, n
     solid_volume_production_rate = np.zeros_like(analysis_depths)
     partial_particle_densities = np.zeros((analysis_depths.size, integration_depths.size))
     particle_radius_unnormalised = np.zeros((analysis_depths.size, integration_depths.size))
+    mean_particle_velocities = np.zeros_like(analysis_depths)
     for i, analysis_r in enumerate(analysis_depths):
         analysis_index = i + 2
         # Particle density at this depth is 'just' the partial density
@@ -946,6 +973,7 @@ def evaluate_partcle_densities(solutions, analysis_depths, integration_depths, n
         partial_densities = np.zeros_like(integration_depths)
         partial_radius = np.zeros_like(integration_depths)
         particle_volume_growth_rate = np.zeros_like(integration_depths)
+        partial_velocities = np.zeros_like(integration_depths)
         for j, int_r in enumerate(integration_depths):
             # Skip if this will be zero - avoid noise
             if analysis_r > int_r:
@@ -973,7 +1001,7 @@ def evaluate_partcle_densities(solutions, analysis_depths, integration_depths, n
             nuc_vol = nuc_area * nuc_height
             if verbose:
                 print("\nPartial density calc for r =", analysis_r, "with nuc at r =", int_r)
-            partial_densities[j], particle_volume_growth_rate[j] = partial_particle_density(solutions[j],
+            partial_densities[j], particle_volume_growth_rate[j], partial_velocities[j] = partial_particle_density(solutions[j],
                                             analysis_index, nuc_rate, nuc_vol, num_areas, verbose=verbose)
             
             # Put radius at this radius and nuc radius in radius histogram
@@ -1011,9 +1039,16 @@ def evaluate_partcle_densities(solutions, analysis_depths, integration_depths, n
         solid_volume_production_rate[i] = np.sum(particle_volume_growth_rate * partial_densities)
         if verbose:
             print(f"Solid production rate is {solid_volume_production_rate[i]} m^3 s^-1 / m^3")
+            
+        # Solid flux and velocity
+        # Take the mean velocity as the sum of the particle velocities time the 
+        # number density normalised by the sum of the number densities
+        mean_particle_velocities[i] = np.mean((partial_densities * partial_velocities) /
+                                          np.sum(partial_densities))
         
     return particle_densities, solid_vf, particle_radius_unnormalised, \
-                   partial_particle_densities, solid_volume_production_rate
+                   partial_particle_densities, solid_volume_production_rate, \
+                   mean_particle_velocities
 
 
 def evaluate_particle_seperation(particle_densities, analysis_depths, verbose=True):
@@ -1102,14 +1137,16 @@ def integrate_snow_zone(analysis_depths, radius_inner_core, radius_top_flayer, i
                 report_all_solution_events(sol, analysis_depths)
         solutions.append(sol)
     
-    particle_densities, solid_vf, \
-        particle_radius_unnormalised, partial_particle_densities, solid_volume_production_rate = evaluate_partcle_densities(solutions, 
-                                        analysis_depths, integration_depths, nucleation_rates, radius_inner_core, 
-                                                                                             radius_top_flayer, verbose=verbose)
+    particle_densities, solid_vf, particle_radius_unnormalised, \
+    partial_particle_densities, solid_volume_production_rate, \
+    mean_particle_velocities = evaluate_partcle_densities(
+        solutions, analysis_depths, integration_depths, nucleation_rates,
+        radius_inner_core, radius_top_flayer, verbose=verbose)
     
     growth_rate = evaluate_core_growth_rate(solutions, integration_depths, nucleation_rates, radius_inner_core, verbose=verbose)
     
-    return solutions, particle_densities, growth_rate, solid_vf, particle_radius_unnormalised, \
-                                          partial_particle_densities, solid_volume_production_rate
+    return solutions, particle_densities, growth_rate, solid_vf, \
+           particle_radius_unnormalised, partial_particle_densities, \
+           solid_volume_production_rate, mean_particle_velocities
     
     
