@@ -32,3 +32,7 @@ describing the model:
 * **cases**
 
 * **[intro.ipynb](./intro.ipynb)**: a jupyter notebook containing the same information as this file
+
+## To run a case
+
+./run_flayer.py -f diffusion_out.pickle example_parameters.yaml > diffusion_out.out 2>&1 &
