@@ -127,6 +127,11 @@ def diffusion_growth_velocity(xl, delta, pressure, temperature, dl, k0):
         print(f"xp low err = {low_fe_err}, xp high err = {high_fe_err}")
         print(f"xl = {xl}, delta = {delta}, t = {temperature}, pressure = {pressure}")
         print(f"dl = {dl}, k0 = {k0}")
+        if delta < 1.0E-11:
+            print("returning raw growth rate")
+            xp = xl
+            v = growth_velocity_feo(xp, pressure, temperature, k0)
+            return v, xp
     
     xp, root_result = spo.brentq(_optimise_boundary_composition, 1.0E-26, 1.0-1.0E-26, 
                                  args=(xl, delta, temperature, pressure, dl, k0),
