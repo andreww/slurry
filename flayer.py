@@ -591,19 +591,21 @@ def evaluate_flayer_wrapper_func(params, tfunc_creator, xfunc_creator, pfunc, gf
                     nucleation_radii, analysis_radii, radius_inner_core, 
                     radius_top_flayer, verbose=False, silent=False)
     
-    sset = np.sqrt(np.sum((tpoints - t_points_out)**2)/len(analysis_radii))
-    ssex = np.sqrt(np.sum((xl_points_in - xl_points_out)**2)/len(analysis_radii))
+    sset = np.sqrt(np.sum((tpoints - t_points_out)**2)/len(analysis_radii)) \
+                / tpoints[-1] # Normalise by temperatrue at top of F-layer
+    ssex = np.sqrt(np.sum((xl_points_in - xl_points_out)**2)/len(analysis_radii)) \
+                / xl_points_in[-1]
     # Should be in callback: 
-    print(f"Mean abs temperature error = {sset:4g} (K)")
-    print(f"Mean abs composition error = {ssex:4g} (mol frac Fe)")
+    print(f"Normalised SSE temperature difference = {sset:4g}")
+    print(f"Normalised SSE composition difference = {ssex:4g}")
     if mode == 'temp':
         sse = sset
     elif mode == 'comp':
         sse = ssex
     else:
         # Errors already caught. Must be 'both'
-        sse = (sset + ssex)/2.0
-    print(f"Mean abs error for solver = {sse:4g}")
+        sse = sset + ssex
+    print(f"Error for solver = {sse:4g}")
     return sse
     
 
