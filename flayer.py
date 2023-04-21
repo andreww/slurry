@@ -437,6 +437,7 @@ def solve_flayer(ftfunc, tfunc_creator, xfunc, xfunc_creator, pfunc, gfunc, star
     
     # Bounds for temperature
     lbt = np.ones_like(t_params_guess)
+    # Temperature must get hotter downwards, negative grad
     lbt[0] = 10.0*t_params_guess[0]
     lbt[1:] = -25.0
     ubt = np.ones_like(t_params_guess)
@@ -452,11 +453,14 @@ def solve_flayer(ftfunc, tfunc_creator, xfunc, xfunc_creator, pfunc, gfunc, star
     
     # Bounds for composition
     lbx = np.ones_like(x_params_guess)
-    lbx[0] = -1.0E-6 / (radius_top_flayer - radius_inner_core)
-    lbx[1:] = -0.1E-8
+    # Maximum gradient should be 0 - composition must get more O rich down 
+    lbx[0] = 0.0
+    lbx[1:] = -1.0E-3
     ubx = np.ones_like(t_params_guess)
-    ubx[0] = 1.0E-6 / (radius_top_flayer - radius_inner_core)
-    ubx[1:] = 0.1E-8
+    # Minimim gradient should give 10 mol% O over layer - 
+    # composition must get more O rich down 
+    ubx[0] = 0.1 / (radius_top_flayer - radius_inner_core)
+    ubx[1:] = 1.0E-3
     
     if opt_mode == 'temp':
         params_guess = t_params_guess
