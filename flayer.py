@@ -19,7 +19,7 @@ import layer_diffusion
 def evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
                     k0, dl, k, mu, i0, surf_energy, wetting_angle, hetrogeneous_radius,
                     nucleation_radii, analysis_radii, radius_inner_core, 
-                    radius_top_flayer, verbose=False, silent=False):
+                    radius_top_flayer, verbose=False, silent=False, diffusion_problem=False):
     """
     Create a single solution for the F-layer assuming non-equilibrium growth and falling
     of iron crystals
@@ -60,6 +60,8 @@ def evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
     radius_top_flayer: radius to top of F-layer (m)
     verbose: optional bool default false. If true print lots of output
     silent: optional bool default false. If true suppress all output. Default should be sensible as a log of a run to a terminal.
+    diffusion_problem: solve diffusion / advection problem from the slurry equations to allow self-consistent
+           layer to be optimised. Then returns t_points_out and xl_points_out. These are None otherwise.
         
     Returns:
     solutions: list of IVP solution objects, one per nucleation_radii
@@ -75,9 +77,12 @@ def evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
         radius.
     crit_nuc_radii: CNT critical radii for the solution (m)
     nucleation_rates: CNT nucleation rates for the solution (events s^-1 m^-3)
-    t_points: new evaluation of temperature on grid points (K)
-    xl_points: new evaluation of iron content on gris points (mol frac Fe)
+    t_points_out: new evaluation of temperature on grid points (K); only if diffusion_problem=True
+    xl_points_out: new evaluation of iron content on gris points (mol frac Fe); only if diffusion_problem=True
     """
+    
+    t_points_out = None
+    xl_points_out = None
     
     # Calculate nucleation rates and radii at each radius
     if not silent:
@@ -117,36 +122,41 @@ def evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
                                                             pfunc(analysis_radii),
                                                             tfunc(analysis_radii))
     
-    # Calculate solid flux term - del rho u phi
     solid_mass_fraction = (fe_density * solid_vf) / (fe_density * solid_vf +
                                                      liquid_density * (1.0 - solid_vf))
-    print("Calculating solid flux term thingy")
-    print(f"solid mass fraction: {solid_mass_fraction}")
-    print(f"mean velocities: {mean_particle_velocities}")
-    print(f"solid densities: {fe_density}")
-    print(f"r : {analysis_radii}")
     
-    function_to_finite_difference = analysis_radii**2 * fe_density * \
+    if diffusion_problem:
+        # Calculate solid flux term - del rho u phi
+        # NB: not working properly - see notes from meetings
+        # 20/4/2023
+        print("Calculating solid flux term thingy")
+        print(f"solid mass fraction: {solid_mass_fraction}")
+        print(f"mean velocities: {mean_particle_velocities}")
+        print(f"solid densities: {fe_density}")
+        print(f"r : {analysis_radii}")
+    
+        function_to_finite_difference = analysis_radii**2 * fe_density * \
                                     mean_particle_velocities * solid_mass_fraction
     
-    flux_term = (1.0 / analysis_radii**2) * np.gradient(function_to_finite_difference,
+        flux_term = (1.0 / analysis_radii**2) * np.gradient(function_to_finite_difference,
                                                         analysis_radii)
-    print(f"flux term: {flux_term}")
+        print(f"flux term: {flux_term}")
     
     # Solution for latent heat
 
     latent_heat = 0.75 * 1000000.0 # J/kg - from Davies 2015, could calculate this from the thermodynamics I think (FIXME). 0.75E6
     mass_production_rate = solid_volume_production_rate * fe_density
     heat_production_rate = mass_production_rate * latent_heat
-    top_bc = tfunc(analysis_radii[-1])
-    bottom_bc = 0.0
-    if verbose or (not silent):
-        print("Finding T to match heat production rate")
-        print(f"Boundary conditions, top: {top_bc} K, bottom {bottom_bc} K/m")
-    t_points_out = layer_diffusion.solve_layer_diffusion(analysis_radii, heat_production_rate, 
-                                                         100.0, tfunc(analysis_radii),
-                                                         top_value_bc=top_bc,
-                                                         bottom_derivative_bc=bottom_bc)
+    if diffusion_problem:
+        top_bc = tfunc(analysis_radii[-1])
+        bottom_bc = 0.0
+        if verbose or (not silent):
+            print("Finding T to match heat production rate")
+            print(f"Boundary conditions, top: {top_bc} K, bottom {bottom_bc} K/m")
+        t_points_out = layer_diffusion.solve_layer_diffusion(analysis_radii, heat_production_rate, 
+                                                             100.0, tfunc(analysis_radii),
+                                                             top_value_bc=top_bc,
+                                                             bottom_derivative_bc=bottom_bc)
 
     #print(f"volume production rate {solid_volume_production_rate}")
     #print(f"mass production rate {mass_production_rate}")
@@ -156,36 +166,43 @@ def evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
     #print(f"k {100}")
 
     # Solution for chemistry
-    top_x_bc = xfunc(analysis_radii[-1])
-    c_top = feot.mass_percent_o(top_x_bc)/100.0
-    c_bottom = 0.0
     initial_c = feot.mass_percent_o(xfunc(analysis_radii))/100.0
     source_rate = initial_c * mass_production_rate
-    dl = 1.0E-6
-    print(f"With fake DL={dl}")
-    if verbose or (not silent):
-        print("Finding X to oxygen production rate")
-        print(f"Boundary conditions, top: {c_top} kg(?), bottom {c_bottom} kg(?)/m")
-    c_points_out = layer_diffusion.solve_layer_diffusion(analysis_radii, source_rate, 
-                                                         dl*np.mean(fe_density), initial_c,
-                                                         top_value_bc=c_top,
-                                                         bottom_derivative_bc=c_bottom)
-    #print(f"c_points_out {c_points_out}")
-    #print(f"source_rate {source_rate}")
-    #print(f"initial_c {initial_c}")
-    #print(f"dl rho {dl*np.mean(fe_density)}")
-    xl_points_out = feot.mol_frac_fe(c_points_out * 100.0)
+    if diffusion_problem:
+        top_x_bc = xfunc(analysis_radii[-1])
+        c_top = feot.mass_percent_o(top_x_bc)/100.0
+        c_bottom = 0.0
+        dl = 1.0E-6
+        print(f"With fake DL={dl}")
+        if verbose or (not silent):
+            print("Finding X to oxygen production rate")
+            print(f"Boundary conditions, top: {c_top} kg(?), bottom {c_bottom} kg(?)/m")
+        c_points_out = layer_diffusion.solve_layer_diffusion(analysis_radii, source_rate, 
+                                                             dl*np.mean(fe_density), initial_c,
+                                                             top_value_bc=c_top,
+                                                             bottom_derivative_bc=c_bottom)
+        #print(f"c_points_out {c_points_out}")
+        #print(f"source_rate {source_rate}")
+        #print(f"initial_c {initial_c}")
+        #print(f"dl rho {dl*np.mean(fe_density)}")
+        xl_points_out = feot.mol_frac_fe(c_points_out * 100.0)
     
     # Report
     if verbose or (not silent and len(analysis_radii) <= 10):
         print("Radius (km), P (GPa), Guess T (K), Guess X, dm/dt (kg/s), Q (W/m^3), O prod rate, Calculated T (K), Calculated X")
         for i, r in enumerate(analysis_radii):
-            print(f"{r/1000.0:4g} {pfunc(r):3g} {tfunc(r):4g} {xfunc(r):4g} {mass_production_rate[i]:.3g} {heat_production_rate[i]:.3g} {source_rate[i]:.3g} {t_points_out[i]:4g} {xl_points_out[i]:4g}")
+            if diffusion_problem:
+                print(f"{r/1000.0:4g} {pfunc(r):3g} {tfunc(r):4g} {xfunc(r):4g} {mass_production_rate[i]:.3g} {heat_production_rate[i]:.3g} {source_rate[i]:.3g} {t_points_out[i]:4g} {xl_points_out[i]:4g}")
+            else:
+                print(f"{r/1000.0:4g} {pfunc(r):3g} {tfunc(r):4g} {xfunc(r):4g} {mass_production_rate[i]:.3g} {heat_production_rate[i]:.3g} {source_rate[i]:.3g} ---- ----")
     elif not silent:
         print("Radius (km), P (GPa), Guess T (K), Guess X, dm/dt (kg/s), Q (W/m^3), O prod rate, Calculated T (K), Calculated X")
         for i, r in enumerate(analysis_radii):
             if i%(len(analysis_radii)//10) == 0: 
-                print(f"{r/1000.0:4g} {pfunc(r):3g} {tfunc(r):4g} {xfunc(r):4g} {mass_production_rate[i]:.3g} {heat_production_rate[i]:.3g} {source_rate[i]:.3g} {t_points_out[i]:4g} {xl_points_out[i]:4g}")     
+                if diffusion_problem:
+                    print(f"{r/1000.0:4g} {pfunc(r):3g} {tfunc(r):4g} {xfunc(r):4g} {mass_production_rate[i]:.3g} {heat_production_rate[i]:.3g} {source_rate[i]:.3g} {t_points_out[i]:4g} {xl_points_out[i]:4g}")
+                else:
+                    print(f"{r/1000.0:4g} {pfunc(r):3g} {tfunc(r):4g} {xfunc(r):4g} {mass_production_rate[i]:.3g} {heat_production_rate[i]:.3g} {source_rate[i]:.3g} ---- ----")     
         
     return solutions, particle_densities, growth_rate, solid_vf, \
         particle_radius_unnormalised, partial_particle_densities, \

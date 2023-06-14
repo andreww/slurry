@@ -128,7 +128,7 @@ def flayer_case(f_layer_thickness, delta_t_icb, xfe_outer_core, xfe_icb,
                    particle_densities, growth_rate, solid_vf,
                    particle_radius_unnormalised, partial_particle_densities, 
                    opt_tfunc, opt_xfunc, 
-                   pfunc, verbose=verbose)
+                   pfunc, verbose=verbose, diffusion_problem=True)
     
     
     return solutions, analysis_radii, particle_densities, calculated_seperation, solid_vf, \
@@ -316,7 +316,8 @@ def solve_flayer(ftfunc, tfunc_creator, xfunc, xfunc_creator, pfunc, gfunc, star
     crit_nuc_radii, nucleation_rates, out_t_points, out_x_points = flayer.evaluate_flayer(
             tfunc, xfunc, pfunc, gfunc, start_time, max_time, k0, dl, k, mu, i0, 
             surf_energy, wetting_angle, hetrogeneous_radius, nucleation_radii, 
-            analysis_radii, radius_inner_core, radius_top_flayer, verbose, silent)
+            analysis_radii, radius_inner_core, radius_top_flayer, verbose, silent,
+            diffusion_problem=True)
     
     # We should report the temperatures we used for the final calculation
     # (we should also report the output temperatures too, but they will match 
@@ -368,7 +369,8 @@ def evaluate_flayer_wrapper_func(params, tfunc_creator, xfunc_creator, pfunc, gf
             flayer.evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
                     k0, dl, k, mu, i0, surf_energy, wetting_angle, hetrogeneous_radius,
                     nucleation_radii, analysis_radii, radius_inner_core, 
-                    radius_top_flayer, verbose=False, silent=False)
+                    radius_top_flayer, verbose=False, silent=False,
+                    diffusion_problem=True)
     
     sset = np.sqrt(np.sum((tpoints - t_points_out)**2)/len(analysis_radii)) \
                 / tpoints[-1] # Normalise by temperatrue at top of F-layer
