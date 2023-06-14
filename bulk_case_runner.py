@@ -8,7 +8,7 @@ import scipy.interpolate as spi
 import matplotlib.pyplot as plt
 import matplotlib.colors as mplc
 
-import flayer
+import layer_optimize
 import particle_evolution
 import feo_thermodynamics as feot
 
@@ -34,7 +34,7 @@ def run_flayer_case(input_data, filename=None):
     
     solutions, analysis_radii, particle_densities, calculated_seperation, solid_vf, \
         particle_radii, partial_particle_densities, growth_rate, crit_nuc_radii, nucleation_rates, \
-        vf_ratio, out_x_points, out_t_points, opt_params = flayer.flayer_case(**input_data)
+        vf_ratio, out_x_points, out_t_points, opt_params = layer_optimize.flayer_case(**input_data)
     
     output_data = dict(input_data)
     
