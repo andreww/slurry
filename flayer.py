@@ -143,10 +143,15 @@ def evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
         print(f"flux term: {flux_term}")
     
     # Solution for latent heat
-
+    # solid volume production rate is in m^3 s^-1 m^-3
+    # mass_production_rate is in kg s^-1 m^-3
+    # latent heat is in J s^-1 m^-3 (W/m^3)
+    # So integrate over volume of layer to get W
     latent_heat = 0.75 * 1000000.0 # J/kg - from Davies 2015, could calculate this from the thermodynamics I think (FIXME). 0.75E6
     mass_production_rate = solid_volume_production_rate * fe_density
     heat_production_rate = mass_production_rate * latent_heat
+    integrand = heat_production_rate * analysis_radii**2
+    total_power_from_latent_heat = 4.0/3.0 * np.trapz(integrand, analysis_radii) # W
     if diffusion_problem:
         top_bc = tfunc(analysis_radii[-1])
         bottom_bc = 0.0
@@ -167,7 +172,9 @@ def evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
 
     # Solution for chemistry
     initial_c = feot.mass_percent_o(xfunc(analysis_radii))/100.0
-    source_rate = initial_c * mass_production_rate
+    source_rate = initial_c * mass_production_rate # kg of O s^-1 m^-3
+    integrand = source_rate * analysis_radii**2
+    total_mass_o_rate = 4.0/3.0 * np.trapz(integrand, analysis_radii) # kg of O s^-2
     if diffusion_problem:
         top_x_bc = xfunc(analysis_radii[-1])
         c_top = feot.mass_percent_o(top_x_bc)/100.0
@@ -189,24 +196,31 @@ def evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
     
     # Report
     if verbose or (not silent and len(analysis_radii) <= 10):
-        print("Radius (km), P (GPa), Guess T (K), Guess X, dm/dt (kg/s), Q (W/m^3), O prod rate, Calculated T (K), Calculated X")
+        if diffusion_problem:
+            print("Radius (km), P (GPa), Guess T (K), Guess X, dm/dt (kg/s), Q (W/m^3), O prod rate, Calculated T (K), Calculated X")
+        else:
+            print("Radius (km), P (GPa), Guess T (K), Guess X, dm/dt (kg/s), Q (W/m^3), O prod rate")
         for i, r in enumerate(analysis_radii):
             if diffusion_problem:
                 print(f"{r/1000.0:4g} {pfunc(r):3g} {tfunc(r):4g} {xfunc(r):4g} {mass_production_rate[i]:.3g} {heat_production_rate[i]:.3g} {source_rate[i]:.3g} {t_points_out[i]:4g} {xl_points_out[i]:4g}")
             else:
-                print(f"{r/1000.0:4g} {pfunc(r):3g} {tfunc(r):4g} {xfunc(r):4g} {mass_production_rate[i]:.3g} {heat_production_rate[i]:.3g} {source_rate[i]:.3g} ---- ----")
+                print(f"{r/1000.0:4g} {pfunc(r):3g} {tfunc(r):4g} {xfunc(r):4g} {mass_production_rate[i]:.3g} {heat_production_rate[i]:.3g} {source_rate[i]:.3g}")
     elif not silent:
-        print("Radius (km), P (GPa), Guess T (K), Guess X, dm/dt (kg/s), Q (W/m^3), O prod rate, Calculated T (K), Calculated X")
+        if diffusion_problem:
+            print("Radius (km), P (GPa), Guess T (K), Guess X, dm/dt (kg/s), Q (W/m^3), O prod rate, Calculated T (K), Calculated X")
+        else:
+            print("Radius (km), P (GPa), Guess T (K), Guess X, dm/dt (kg/s), Q (W/m^3), O prod rate")
         for i, r in enumerate(analysis_radii):
             if i%(len(analysis_radii)//10) == 0: 
                 if diffusion_problem:
                     print(f"{r/1000.0:4g} {pfunc(r):3g} {tfunc(r):4g} {xfunc(r):4g} {mass_production_rate[i]:.3g} {heat_production_rate[i]:.3g} {source_rate[i]:.3g} {t_points_out[i]:4g} {xl_points_out[i]:4g}")
                 else:
-                    print(f"{r/1000.0:4g} {pfunc(r):3g} {tfunc(r):4g} {xfunc(r):4g} {mass_production_rate[i]:.3g} {heat_production_rate[i]:.3g} {source_rate[i]:.3g} ---- ----")     
+                    print(f"{r/1000.0:4g} {pfunc(r):3g} {tfunc(r):4g} {xfunc(r):4g} {mass_production_rate[i]:.3g} {heat_production_rate[i]:.3g} {source_rate[i]:.3g}")     
         
     return solutions, particle_densities, growth_rate, solid_vf, \
         particle_radius_unnormalised, partial_particle_densities, \
-        crit_nuc_radii, nucleation_rates, t_points_out, xl_points_out
+        crit_nuc_radii, nucleation_rates, t_points_out, xl_points_out, \
+        total_power_from_latent_heat, total_mass_o_rate
 
 
 def analyse_flayer(solutions, integration_radii, analysis_radii, nucleation_rates, radius_inner_core,

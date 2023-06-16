@@ -313,7 +313,7 @@ def solve_flayer(ftfunc, tfunc_creator, xfunc, xfunc_creator, pfunc, gfunc, star
         print("Recaculating F-layer solution at optimum temperature")
     solutions, particle_densities, growth_rate, solid_vf, \
     particle_radius_unnormalised, partial_particle_densities, \
-    crit_nuc_radii, nucleation_rates, out_t_points, out_x_points = flayer.evaluate_flayer(
+    crit_nuc_radii, nucleation_rates, out_t_points, out_x_points, _, _ = flayer.evaluate_flayer(
             tfunc, xfunc, pfunc, gfunc, start_time, max_time, k0, dl, k, mu, i0, 
             surf_energy, wetting_angle, hetrogeneous_radius, nucleation_radii, 
             analysis_radii, radius_inner_core, radius_top_flayer, verbose, silent,
@@ -365,7 +365,7 @@ def evaluate_flayer_wrapper_func(params, tfunc_creator, xfunc_creator, pfunc, gf
     
     solutions, particle_densities, growth_rate, solid_vf, \
         particle_radius_unnormalised, partial_particle_densities, \
-        crit_nuc_radii, nucleation_rates, t_points_out, xl_points_out = \
+        crit_nuc_radii, nucleation_rates, t_points_out, xl_points_out, _, _ = \
             flayer.evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
                     k0, dl, k, mu, i0, surf_energy, wetting_angle, hetrogeneous_radius,
                     nucleation_radii, analysis_radii, radius_inner_core, 
