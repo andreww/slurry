@@ -8,7 +8,7 @@ import scipy.interpolate as spi
 import matplotlib.pyplot as plt
 import matplotlib.colors as mplc
 
-import flayer
+import layer_optimize
 import particle_evolution
 import feo_thermodynamics as feot
 
@@ -33,8 +33,8 @@ def run_flayer_case(input_data, filename=None):
     output_data: a dictionary of input and output data"""
     
     solutions, analysis_radii, particle_densities, calculated_seperation, solid_vf, \
-        particle_radii, partial_particle_densities, growth_rate, opt_xl, crit_nuc_radii, nucleation_rates, \
-        vf_ratio = flayer.flayer_case(**input_data)
+        particle_radii, partial_particle_densities, growth_rate, crit_nuc_radii, nucleation_rates, \
+        vf_ratio, out_x_points, out_t_points, opt_params = layer_optimize.flayer_case(**input_data)
     
     output_data = dict(input_data)
     
@@ -46,10 +46,12 @@ def run_flayer_case(input_data, filename=None):
     output_data["particle_radii"] = particle_radii
     output_data["partial_particle_densities"] = partial_particle_densities
     output_data["growth_rate"] = growth_rate
-    output_data["opt_xl"] = opt_xl
     output_data["crit_nuc_radii"] = crit_nuc_radii
     output_data["nucleation_rates"] = nucleation_rates
     output_data["vf_ratio"] = vf_ratio
+    output_data["out_x_points"] = out_x_points
+    output_data["out_t_points"] = out_t_points
+    output_data["opt_params"] = opt_params
     
     if filename is not None:
         with open(filename, 'wb') as f:
@@ -80,7 +82,7 @@ def plot_case_single_solution(index, data):
     
  
 def plot_case_csd_nuc(particle_radii, analysis_radii, partial_particle_densities,
-                      crit_nuc_radii, nucleation_rates, logscale=False, nonuc=True, **other_data):
+                      crit_nuc_radii, nucleation_rates, logscale=False, nonuc=True, nosum=True, **other_data):
 
     max_particle_radius = particle_radii[particle_radii > 0.0].max()
     min_particle_radius = particle_radii[particle_radii > 0.0].min()
@@ -88,7 +90,7 @@ def plot_case_csd_nuc(particle_radii, analysis_radii, partial_particle_densities
 
     particle_size_distributions = []
     edges = None
-    binsin = np.linspace(min_particle_radius, max_particle_radius, 20)
+    binsin = np.linspace(min_particle_radius, max_particle_radius, 10)
 
     for i, r in enumerate(analysis_radii):
         csd, edg = np.histogram(particle_radii[i,:], 
@@ -113,10 +115,11 @@ def plot_case_csd_nuc(particle_radii, analysis_radii, partial_particle_densities
         return fmttick
 
     if nonuc:
-        fig, axs = plt.subplots(nrows=2, ncols=1, figsize=(12,8), sharex='col')
+        fig, axs = plt.subplots(nrows=2, ncols=1, figsize=(12,8), sharex='col', tight_layout=True)
     else:
         fig, axs = plt.subplots(nrows=2, ncols=2, figsize=(12,8), sharex='col')
     fig.subplots_adjust(hspace=0, wspace=0.1)
+
 
     if nonuc:
         ax = axs[0]
@@ -133,7 +136,8 @@ def plot_case_csd_nuc(particle_radii, analysis_radii, partial_particle_densities
                    extent=[analysis_radii[1]/1000.0, analysis_radii[-1]/1000.0,
                            edges[0], edges[-1]])
     ax.set_ylabel('Particle radius (m)')
-    ax.set_xlabel('Radius (km)')
+    #ax.set_xlabel('Radius (km)')
+    ax.set_xlim(1221.5, 1471.5)
     #ax.set_yscale('log')
 
     cb = plt.colorbar(im, ax=ax, location='top')
@@ -145,10 +149,11 @@ def plot_case_csd_nuc(particle_radii, analysis_radii, partial_particle_densities
     else:
         ax = axs[1,0]
     ax.plot(analysis_radii[1:-1]/1000.0, csd[1:-1,:].sum(axis=1))
-
     ax.set_xlabel('Radius (km)')
     ax.set_ylabel('Total number of particles per m$^3$')
     ax.yaxis.set_major_formatter(_sciformat)
+    
+    ax.set_xlim(1221.5, 1471.5)
 
     if not nonuc:
         ax = axs[0, 1]
@@ -171,22 +176,31 @@ def plot_case_csd_nuc(particle_radii, analysis_radii, partial_particle_densities
     plt.show()
     
 def plot_case_setup(r_icb, r_cmb, f_layer_thickness, gruneisen_parameter, 
-                    delta_t_icb, xfe_outer_core, xfe_icb, **kwargs):
+                    delta_t_icb, xfe_outer_core, xfe_icb, number_of_analysis_points, t_params, **kwargs):
     
     # Generate the functions for temperautre,
     # composition, pressure and gravity
-    tfunc, atfunc, xfunc, pfunc, \
+    
+    # Derived values of use
+    r_flayer_top = r_icb + f_layer_thickness
+        
+    # Discretisation points
+    nucleation_radii = np.linspace(r_icb, r_flayer_top, number_of_analysis_points)
+    analysis_radii = np.linspace(r_icb, r_flayer_top, number_of_analysis_points)
+    
+    tfunc, atfunc, ftfunc, tfunc_creator, xfunc, pfunc, \
         gfunc = flayer.setup_flayer_functions(r_icb, r_cmb, f_layer_thickness, 
                                               gruneisen_parameter, delta_t_icb,
-                                              xfe_outer_core, xfe_icb)
+                                              xfe_outer_core, xfe_icb, analysis_radii)
+    ftfunc = tfunc_creator(t_params)
 
     print("Temperature at CMB is", tfunc(r_cmb), "K")
     print("Temberature at top of F-layer is", tfunc(r_icb+f_layer_thickness), "K")
-    print("Temberature at ICB is", tfunc(r_icb), "K")
+    print("Temberature at ICB is", ftfunc(r_icb), "K")
 
     # Interpolate onto radius for plotting
     rs = np.linspace(r_icb, r_icb+500.0E3)
-    ts = tfunc(rs)
+    ts = ftfunc(rs)
     ats = atfunc(rs)
     ps = pfunc(rs)
     xs = xfunc(rs)
@@ -218,13 +232,25 @@ def plot_case_setup(r_icb, r_cmb, f_layer_thickness, gruneisen_parameter,
     fig.tight_layout()  
     plt.show()
     
-def plot_case_solid_frac(analysis_radii, r_icb, r_cmb, f_layer_thickness, gruneisen_parameter, 
-                    delta_t_icb, xfe_outer_core, xfe_icb, solid_vf, **kwargs):
+def plot_case_solid_frac(analysis_radii, r_icb, r_cmb, f_layer_thickness, gruneisen_parameter, number_of_knots,
+                    delta_t_icb, xfe_outer_core, xfe_icb, solid_vf, number_of_analysis_points, t_params, **kwargs):
 
-    tfunc, atfunc, xfunc, pfunc, \
+    # Generate the functions for temperautre,
+    # composition, pressure and gravity
+    
+    # Derived values of use
+    r_flayer_top = r_icb + f_layer_thickness
+        
+    # Discretisation points
+    nucleation_radii = np.linspace(r_icb, r_flayer_top, number_of_analysis_points)
+    analysis_radii = np.linspace(r_icb, r_flayer_top, number_of_analysis_points)
+    knott_radii = np.linspace(r_icb, r_flayer_top, number_of_knots)
+    
+    tfunc, atfunc, ftfunc, tfunc_creator, xfunc, pfunc, \
         gfunc = flayer.setup_flayer_functions(r_icb, r_cmb, f_layer_thickness, 
                                               gruneisen_parameter, delta_t_icb,
-                                              xfe_outer_core, xfe_icb)
+                                              xfe_outer_core, xfe_icb, knott_radii)
+    tfunc = tfunc_creator(t_params)
 
     fig, axs = plt.subplots(ncols=2, figsize=(12,6), tight_layout=True)
     ax = axs[0]

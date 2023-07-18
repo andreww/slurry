@@ -24,7 +24,7 @@ def main(parameters, filename=None):
     print(f"Inner core growth rate is {data['growth_rate']:.3e} km/Myr")
     print(f"Max vf_ratio is {np.nanmax(data['vf_ratio']):.3e}")
     if data['growth_rate'] > 1.0E-16:
-        max_extra_o = np.max(feot.mass_percent_o(data["opt_xl"]) -  feot.mass_percent_o(data["xfe_outer_core"]))
+        max_extra_o = np.max(feot.mass_percent_o(data["out_x_points"]) -  feot.mass_percent_o(data["xfe_outer_core"]))
         print(f"Max extra O in liquid {max_extra_o:.2e} % O by mass")
         max_particle_radius = data["particle_radii"][data["particle_radii"] > 0.0].max()
         min_particle_radius = data["particle_radii"][data["particle_radii"] > 0.0].min()

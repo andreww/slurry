@@ -351,8 +351,18 @@ def densities(x, p, t):
     
     in kg/m^3
     """
+    # Sometimes we seem to get negative temperature in here. Which is odd.
+    # Avoid by setting to 5600 K
+    if t <= 0.0:
+        print("Negative T avoided in densities!")
+        print(f"t = {t} set to 5600 K")
+        t = 5600.0
     # Evalute volumes seperatly - we may enable non-ideal behaviour one day
     liquid_vol, fe_liquid_vol, feo_liquid_vol = liquid_molar_volume(x, p, t)
+    if (liquid_vol <= 0.0) or (fe_liquid_vol <= 0.0) or (feo_liquid_vol <= 0.0):
+        print("Problem with volumes")
+        print(f"x = {x}, p = {p}, t = {t}")
+        print(f"liquid_vol = {liquid_vol}, fe_liquid_vol = {fe_liquid_vol}, feo_liquid_vol = {feo_liquid_vol}")
     solid_mixture_vol, fe_hpc_vol, feo_solid_vol = solid_molar_volume(x, p, t)
     liquid_density = 1000.0 * ( x * fe_molar_mass + (1.0 - x) * feo_molar_mass) / liquid_vol
     solid_mixture_density = 1000.0 * ( x * fe_molar_mass + (1.0 - x) * feo_molar_mass) / solid_mixture_vol
