@@ -16,3 +16,4 @@ kinematic_viscosity : 1.0e-6
 thermal_conductivity : 100.0
 max_time : 1.0E20
 opt_mode : 'both'
+hetrogeneous_radius : 10.0e-10
