@@ -35,7 +35,7 @@ def main(input_params, cases_f, outfile, outdir=None):
         delta_x_icb = float(words[2])
         
         # Mass of outer core - for o prod unit conversion
-        m_oc = prem.mass(input_params["r_cmb"], r_inner=input_params["r_icb"])
+        m_oc = prem.mass(input_params["r_cmb"]/1000.0, r_inner=input_params["r_icb"]/1000.0)
         
         # Setup case
         r_icb = input_params["r_icb"]
