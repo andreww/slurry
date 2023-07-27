@@ -98,46 +98,51 @@ def main(input_params, cases_f, outfile, outdir=None):
             wetting_angle = input_params["wetting_angle"]
             hetrogeneous_radius = input_params["hetrogeneous_radius"]
             
+            try:
+                solutions, particle_densities, growth_rate, solid_vf, \
+                particle_radii, partial_particle_densities, crit_nuc_radii, \
+                nucleation_rates, _, _, total_latent_heat, total_o_rate = flayer.evaluate_flayer(
+                    temperature_function, composition_function, pressure_function, gravity_function,
+                    0.0, 1.0E20, k0, dl, k, mu, i0, surf_energy, wetting_angle, hetrogeneous_radius,
+                    nucleation_radii, analysis_radii, r_icb, 
+                    r_flayer_top, verbose=False, silent=True, diffusion_problem=False)
+            except AssertionError:
+                print("Something went wrong in this point")
+                cases_dict["total_latent_heat"].append(None)
+                cases_dict["total_o_rate"].append(None)
+                cases_dict["max_particle_radius"].append(None)    
+            else:
             
-            solutions, particle_densities, growth_rate, solid_vf, \
-            particle_radii, partial_particle_densities, crit_nuc_radii, \
-            nucleation_rates, _, _, total_latent_heat, total_o_rate = flayer.evaluate_flayer(
-                temperature_function, composition_function, pressure_function, gravity_function,
-                0.0, 1.0E20, k0, dl, k, mu, i0, surf_energy, wetting_angle, hetrogeneous_radius,
-                nucleation_radii, analysis_radii, r_icb, 
-                r_flayer_top, verbose=False, silent=True, diffusion_problem=False)
-            
-            
-            output_data = dict(input_params)
+                output_data = dict(input_params)
     
-            output_data["solutions"] = solutions
-            output_data["particle_densities"] = particle_densities
-            output_data["growth_rate"] = growth_rate
-            output_data["solid_vf"] = solid_vf
-            output_data["particle_radii"] = particle_radii
-            output_data["partial_particle_densities"] = partial_particle_densities
-            output_data["crit_nuc_radii"] = crit_nuc_radii
-            output_data["nucleation_rates"] = nucleation_rates
-            output_data["total_latent_heat"] = total_latent_heat
-            output_data["total_o_rate"] = total_o_rate
+                output_data["solutions"] = solutions
+                output_data["particle_densities"] = particle_densities
+                output_data["growth_rate"] = growth_rate
+                output_data["solid_vf"] = solid_vf
+                output_data["particle_radii"] = particle_radii
+                output_data["partial_particle_densities"] = partial_particle_densities
+                output_data["crit_nuc_radii"] = crit_nuc_radii
+                output_data["nucleation_rates"] = nucleation_rates
+                output_data["total_latent_heat"] = total_latent_heat
+                output_data["total_o_rate"] = total_o_rate
             
-            if outdir is not None:
-                case_file = case_name + ".pkl"
-                with open(outdir/case_file, 'wb') as f:
-                    pickle.dump(output_data, f)
+                if outdir is not None:
+                    case_file = case_name + ".pkl"
+                    with open(outdir/case_file, 'wb') as f:
+                        pickle.dump(output_data, f)
             
-            print(f"Heat from crystalisation = {total_latent_heat/1.0E12} TW")
-            print(f"Oxygen production rate = {total_o_rate/1.0E9} Tg/s")
+                print(f"Heat from crystalisation = {total_latent_heat/1.0E12} TW")
+                print(f"Oxygen production rate = {total_o_rate/1.0E9} Tg/s")
             
-            oc_enrichment_rate = ((total_o_rate*60.0*60.0*24.0*365.0*1.0E9)/m_oc)
-            print(f"Oxygen enrichment rate of outer core = {oc_enrichment_rate*100.0} wt. % Oxygen / Ga")
+                oc_enrichment_rate = ((total_o_rate*60.0*60.0*24.0*365.0*1.0E9)/m_oc)
+                print(f"Oxygen enrichment rate of outer core = {oc_enrichment_rate*100.0} wt. % Oxygen / Ga")
             
-            max_particle_radius = particle_radii.max()
-            print(f"maximum particle radius = {max_particle_radius} m")
+                max_particle_radius = particle_radii.max()
+                print(f"maximum particle radius = {max_particle_radius} m")
             
-            cases_dict["total_latent_heat"].append(total_latent_heat)
-            cases_dict["total_o_rate"].append(total_o_rate)
-            cases_dict["max_particle_radius"].append(max_particle_radius)
+                cases_dict["total_latent_heat"].append(total_latent_heat)
+                cases_dict["total_o_rate"].append(total_o_rate)
+                cases_dict["max_particle_radius"].append(max_particle_radius)
             
         else:
             cases_dict["total_latent_heat"].append(None)
