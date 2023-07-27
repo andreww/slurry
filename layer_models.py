@@ -125,6 +125,8 @@ def main(input_params, cases_f, outfile, outdir=None):
                 output_data["nucleation_rates"] = nucleation_rates
                 output_data["total_latent_heat"] = total_latent_heat
                 output_data["total_o_rate"] = total_o_rate
+                
+                output_data["analysis_radii"] = analysis_radii
             
                 if outdir is not None:
                     case_file = case_name + ".pkl"
