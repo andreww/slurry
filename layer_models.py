@@ -106,8 +106,9 @@ def main(input_params, cases_f, outfile, outdir=None):
                     0.0, 1.0E20, k0, dl, k, mu, i0, surf_energy, wetting_angle, hetrogeneous_radius,
                     nucleation_radii, analysis_radii, r_icb, 
                     r_flayer_top, verbose=False, silent=True, diffusion_problem=False)
-            except AssertionError:
-                print("Something went wrong in this point")
+            except (AssertionError, ValueError) as error:
+                print("Something went wrong in this point:")
+                print(error)
                 cases_dict["total_latent_heat"].append(None)
                 cases_dict["total_o_rate"].append(None)
                 cases_dict["max_particle_radius"].append(None)    
