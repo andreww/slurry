@@ -9,6 +9,7 @@ import feo_thermodynamics as feot
 import earth_model
 import nucleation
 import layer_diffusion
+import layer_setup
 
 
 # Functions to build and evaluate models fo the F-layer
@@ -19,7 +20,8 @@ import layer_diffusion
 def evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
                     k0, dl, k, mu, i0, surf_energy, wetting_angle, hetrogeneous_radius,
                     nucleation_radii, analysis_radii, radius_inner_core, 
-                    radius_top_flayer, verbose=False, silent=False, diffusion_problem=False):
+                    radius_top_flayer, brunt_vaisala, verbose=False,
+                    silent=False, diffusion_problem=False):
     """
     Create a single solution for the F-layer assuming non-equilibrium growth and falling
     of iron crystals
@@ -58,6 +60,8 @@ def evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
         where the self conssitency of the solution is checked.
     radius_inner_core: inner core boundary radius (m)
     radius_top_flayer: radius to top of F-layer (m)
+    brunt_vaisala: Brunt Vaisala frequencey for the layer (Hz). This depends on the adaiabatic state so
+        cannot be calculated here. Must be real (i.e. the layer must be staibly stratified).
     verbose: optional bool default false. If true print lots of output
     silent: optional bool default false. If true suppress all output. Default should be sensible as a log of a run to a terminal.
     diffusion_problem: solve diffusion / advection problem from the slurry equations to allow self-consistent
@@ -116,7 +120,7 @@ def evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
         solid_volume_production_rate, mean_particle_velocities = integrate_snow_zone(
         analysis_radii, radius_inner_core, radius_top_flayer, nucleation_radii, 
         nucleation_rates, tfunc, xfunc, pfunc, gfunc,
-        start_time, max_time, crit_nuc_radii, k0, dl, mu, verbose=verbose)
+        start_time, max_time, crit_nuc_radii, k0, dl, mu, brunt_vaisala, verbose=verbose)
     
     liquid_density, _, _, fe_density, _, _ = feot.densities(xfunc(analysis_radii),
                                                             pfunc(analysis_radii),
@@ -550,7 +554,7 @@ def evaluate_core_growth_rate(solutions, integration_depths, nucleation_rates, r
 # Fitst create a interpolator for the ineteraction radius.
 def integrate_snow_zone(analysis_depths, radius_inner_core, radius_top_flayer, integration_depths, 
                         nucleation_rates, tfunc, xl_func, pfunc, gfunc,
-                        start_time, max_time, initial_particle_size, k0, dl, mu, verbose=True):
+                        start_time, max_time, initial_particle_size, k0, dl, mu, brunt_vaisala, verbose=True):
     """
     For a single liquid composition, run the IVPs and do the minimum analysis needed
     
@@ -569,7 +573,8 @@ def integrate_snow_zone(analysis_depths, radius_inner_core, radius_top_flayer, i
                 print("Starting ODE IVP solver for nuclation at", int_depth, "with r0", initial_particle_size[i])
             sol = particle_evolution.falling_growing_particle_solution(start_time, max_time, initial_particle_size[i], 
                                                        int_depth, xl_func, tfunc, pfunc,
-                                                       dl, k0, gfunc, mu, radius_inner_core, analysis_depths)
+                                                       dl, k0, gfunc, mu, radius_inner_core,
+                                                       brunt_vaisala, analysis_depths)
             assert sol.success, "No ODE solution found!"
             if verbose:
                 report_all_solution_events(sol, analysis_depths)

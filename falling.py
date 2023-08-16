@@ -254,6 +254,8 @@ def dimensionless_numbers(radius, re, falling_velocity, kinematic_viscosity, che
         drho_dz = -0.0005 # density grad above ICB (kg/m^2)
         icb_g = 4.4 # gravity above ICB
         brunt_vaisala = np.sqrt(-(icb_g / rho_0) * drho_dz)
+        warnings.warn(f"No density info, falling back to {brunt_vaisala} Hz for Brunt Vaisala")
+
     fr = np.abs(falling_velocity) / (brunt_vaisala * radius)
 
     return pr, pe_t, sc, pe_c, fr

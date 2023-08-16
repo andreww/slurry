@@ -33,7 +33,10 @@ def main(input_params, cases_f, outfile, outdir=None):
         case_name = words[0]
         delta_t_icb = float(words[1])
         delta_x_icb = float(words[2])
-        
+        this_i0 = None
+        if len(words) > 3:
+            this_i0 = float(words[3])
+         
         # Mass of outer core - for o prod unit conversion
         m_oc = prem.mass(input_params["r_cmb"]/1000.0, r_inner=input_params["r_icb"]/1000.0)
         
@@ -93,7 +96,11 @@ def main(input_params, cases_f, outfile, outdir=None):
             dl = input_params["chemical_diffusivity"]
             k = input_params["thermal_conductivity"]
             mu = input_params["kinematic_viscosity"]
-            i0 = input_params["i0"]
+            if this_i0 is None:
+                i0 = input_params["i0"]
+            else:
+                i0 = this_i0
+                input_params["i0"] = i0 # So it gets stored right in the output
             surf_energy = input_params["surf_energy"]
             wetting_angle = input_params["wetting_angle"]
             hetrogeneous_radius = input_params["hetrogeneous_radius"]
@@ -105,13 +112,16 @@ def main(input_params, cases_f, outfile, outdir=None):
                     temperature_function, composition_function, pressure_function, gravity_function,
                     0.0, 1.0E20, k0, dl, k, mu, i0, surf_energy, wetting_angle, hetrogeneous_radius,
                     nucleation_radii, analysis_radii, r_icb, 
-                    r_flayer_top, verbose=False, silent=True, diffusion_problem=False)
+                    r_flayer_top, Nbv, verbose=False, silent=True, diffusion_problem=False)
             except (AssertionError, ValueError) as error:
                 print("Something went wrong in this point:")
                 print(error)
                 cases_dict["total_latent_heat"].append(None)
                 cases_dict["total_o_rate"].append(None)
-                cases_dict["max_particle_radius"].append(None)    
+                cases_dict["max_particle_radius"].append(None)  
+                cases_dict["max_solid_volume_fraction"].append(None)
+                cases_dict["max_nucleation_rate"].append(None)
+
             else:
             
                 output_data = dict(input_params)
@@ -126,6 +136,7 @@ def main(input_params, cases_f, outfile, outdir=None):
                 output_data["nucleation_rates"] = nucleation_rates
                 output_data["total_latent_heat"] = total_latent_heat
                 output_data["total_o_rate"] = total_o_rate
+                output_data["Nbv"] = Nbv
                 
                 output_data["analysis_radii"] = analysis_radii
             
@@ -142,16 +153,25 @@ def main(input_params, cases_f, outfile, outdir=None):
             
                 max_particle_radius = particle_radii.max()
                 print(f"maximum particle radius = {max_particle_radius} m")
+                
+                max_sold_volume_fraction = solid_vf.max()
+                print(f"maximum solid fraction = {max_sold_volume_fraction}")
+                
+                max_nucleation_rate = np.nanmax(nucleation_rates) # nan in region of no nuc, which is OK
+                print(f"max_nucleation_rate = {max_nucleation_rate}")
             
                 cases_dict["total_latent_heat"].append(total_latent_heat)
                 cases_dict["total_o_rate"].append(total_o_rate)
                 cases_dict["max_particle_radius"].append(max_particle_radius)
+                cases_dict["max_solid_volume_fraction"].append(max_sold_volume_fraction)
+                cases_dict["max_nucleation_rate"].append(max_nucleation_rate)
             
         else:
             cases_dict["total_latent_heat"].append(None)
             cases_dict["total_o_rate"].append(None)
             cases_dict["max_particle_radius"].append(None)
-
+            cases_dict["max_solid_volume_fraction"].append(None)
+            cases_dict["max_nucleation_rate"].append(None)
 
         # Append the summary results
         new_df = pd.DataFrame(cases_dict)
