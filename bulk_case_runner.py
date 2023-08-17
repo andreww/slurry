@@ -142,7 +142,9 @@ def plot_case_csd_nuc(particle_radii, analysis_radii, partial_particle_densities
 
     cb = plt.colorbar(im, ax=ax, location='top')
     cb.set_label('Number of particles per m$^{3}$')
-    cb.ax.xaxis.set_major_formatter(_sciformat)
+    #cb.ax.xaxis.set_major_locator()
+    #cb.ax.xaxis.set_major_formatter(_sciformat)
+    
 
     if nonuc:
         ax = axs[1]
