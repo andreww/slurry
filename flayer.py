@@ -129,6 +129,11 @@ def evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
     solid_mass_fraction = (fe_density * solid_vf) / (fe_density * solid_vf +
                                                      liquid_density * (1.0 - solid_vf))
     
+    # Excess density compared to the liquid composition - need to add the excess density
+    # of the liquid (w.r.t. well mixed adiabat) to do a PREM like comparison 
+    solid_excess_density = ((fe_density * solid_vf) + 
+                            (liquid_density * (1.0 - solid_vf))) - liquid_density
+    
     if diffusion_problem:
         # Calculate solid flux term - del rho u phi
         # NB: not working properly - see notes from meetings
@@ -224,7 +229,7 @@ def evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
     return solutions, particle_densities, growth_rate, solid_vf, \
         particle_radius_unnormalised, partial_particle_densities, \
         crit_nuc_radii, nucleation_rates, t_points_out, xl_points_out, \
-        total_power_from_latent_heat, total_mass_o_rate
+        total_power_from_latent_heat, total_mass_o_rate, solid_excess_density
 
 
 def analyse_flayer(solutions, integration_radii, analysis_radii, nucleation_rates, radius_inner_core,

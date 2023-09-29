@@ -286,7 +286,14 @@ def estimate_brunt_vaisala_frequency(r_top, r_bot, tfunc, atfunc, xfunc, gfunc, 
         Nbv = np.sqrt(N2)
     else:
         Nbv = np.sqrt((N2 + 0j))
-    return Nbv, N2
+        
+    # Now, while we are at it, calculate the density excess (w.r.t. the adiabat) at the
+    # icb. This can be added to the density difference between the solid and the liquid
+    # and the solid density excess at the end of the calculation (but that correction is
+    # generally expected to be small.
+    liquid_density_excess = rho_b - ref_rho_b
+    
+    return Nbv, N2, liquid_density_excess
 
 
 def fit_quad_func_boundaries(r_icb, r_ftop, v_icb, v_ftop):

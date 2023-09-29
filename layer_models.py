@@ -79,7 +79,7 @@ def main(input_params, cases_f, outfile, outdir=None):
         dt_cond = t_icb - t_flayer_top
         
         # Check the layer is stratified
-        Nbv, N2 = layer_setup.estimate_brunt_vaisala_frequency(
+        Nbv, N2, liquid_density_excess = layer_setup.estimate_brunt_vaisala_frequency(
             r_flayer_top, r_icb, temperature_function, adiabatic_temperature_function,
             composition_function, gravity_function, pressure_function)
         
@@ -89,6 +89,7 @@ def main(input_params, cases_f, outfile, outdir=None):
         cases_dict["N2"].append(N2)
         cases_dict["dT_liq"].append(dt_liq)
         cases_dict["dT_cond"].append(dt_cond)
+        cases_dict["liquid_density_excess"].append(liquid_density_excess)
         print(f"Dt = {delta_t_icb}, delta_x = {delta_x_icb}, BV freq = {Nbv}, dT_liq = {dt_liq}, dT_cond = {dt_cond}")
         if (N2 >= 0.0) and (dt_liq > 0.0) and (dt_cond > 0.0):
             
@@ -108,7 +109,8 @@ def main(input_params, cases_f, outfile, outdir=None):
             try:
                 solutions, particle_densities, growth_rate, solid_vf, \
                 particle_radii, partial_particle_densities, crit_nuc_radii, \
-                nucleation_rates, _, _, total_latent_heat, total_o_rate = flayer.evaluate_flayer(
+                nucleation_rates, _, _, total_latent_heat, total_o_rate, \
+                solid_excess_density = flayer.evaluate_flayer(
                     temperature_function, composition_function, pressure_function, gravity_function,
                     0.0, 1.0E20, k0, dl, k, mu, i0, surf_energy, wetting_angle, hetrogeneous_radius,
                     nucleation_radii, analysis_radii, r_icb, 
@@ -121,6 +123,7 @@ def main(input_params, cases_f, outfile, outdir=None):
                 cases_dict["max_particle_radius"].append(None)  
                 cases_dict["max_solid_volume_fraction"].append(None)
                 cases_dict["max_nucleation_rate"].append(None)
+                cases_dict["max_solid_excess_density"].append(None)
 
             else:
             
@@ -137,6 +140,8 @@ def main(input_params, cases_f, outfile, outdir=None):
                 output_data["total_latent_heat"] = total_latent_heat
                 output_data["total_o_rate"] = total_o_rate
                 output_data["Nbv"] = Nbv
+                output_data["liquid_density_excess"] = liquid_density_excess
+                output_data["solid_excess_density"] = solid_excess_density
                 
                 output_data["analysis_radii"] = analysis_radii
             
@@ -165,6 +170,7 @@ def main(input_params, cases_f, outfile, outdir=None):
                 cases_dict["max_particle_radius"].append(max_particle_radius)
                 cases_dict["max_solid_volume_fraction"].append(max_sold_volume_fraction)
                 cases_dict["max_nucleation_rate"].append(max_nucleation_rate)
+                cases_dict["max_solid_excess_density"].append(np.max(solid_excess_density))
             
         else:
             cases_dict["total_latent_heat"].append(None)
@@ -172,6 +178,7 @@ def main(input_params, cases_f, outfile, outdir=None):
             cases_dict["max_particle_radius"].append(None)
             cases_dict["max_solid_volume_fraction"].append(None)
             cases_dict["max_nucleation_rate"].append(None)
+            cases_dict["max_solid_excess_density"].append(None)
 
         # Append the summary results
         new_df = pd.DataFrame(cases_dict)
