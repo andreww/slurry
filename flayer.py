@@ -153,14 +153,15 @@ def evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
     
     # Solution for latent heat
     # solid volume production rate is in m^3 s^-1 m^-3
-    # mass_production_rate is in kg s^-1 m^-3
+    # mass_fraction_production_rate is in s^-1
     # latent heat is in J s^-1 m^-3 (W/m^3)
-    # So integrate over volume of layer to get W
-    latent_heat = 0.75 * 1000000.0 # J/kg - from Davies 2015, could calculate this from the thermodynamics I think (FIXME). 0.75E6
-    mass_production_rate = solid_volume_production_rate * fe_density
-    heat_production_rate = mass_production_rate * latent_heat
+    # So integrate M.rho.L over volume of layer to get W
+    latent_heat = 0.75 * 1000000.0 # J/kg - from Davies 2015, could calculate this from the thermodynamics I think (FIXME).
+    mass_fraction_production_rate = solid_volume_production_rate * ((fe_density * solid_vf) / (fe_density * solid_vf +
+                                                              liquid_density * (1.0 - solid_vf))) # mass FRACTION per sec (i.e. units s^-1) 
+    heat_production_rate = mass_fraction_production_rate * latent_heat * fe_density # W/m^3
     integrand = heat_production_rate * analysis_radii**2
-    total_power_from_latent_heat = 4.0/3.0 * np.trapz(integrand, analysis_radii) # W
+    total_power_from_latent_heat = 4.0 * np.pi * np.trapz(integrand, analysis_radii) # W
     if diffusion_problem:
         top_bc = tfunc(analysis_radii[-1])
         bottom_bc = 0.0
@@ -181,9 +182,9 @@ def evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
 
     # Solution for chemistry
     initial_c = feot.mass_percent_o(xfunc(analysis_radii))/100.0
-    source_rate = initial_c * mass_production_rate # kg of O s^-1 m^-3
+    source_rate = initial_c * mass_fraction_production_rate # mass.% / s / m^-3
     integrand = source_rate * analysis_radii**2
-    total_mass_o_rate = 4.0/3.0 * np.trapz(integrand, analysis_radii) # kg of O s^-2
+    total_mass_o_rate = 4.0 * np.pi * np.trapz(integrand, analysis_radii) # kg of O s^-2
     if diffusion_problem:
         top_x_bc = xfunc(analysis_radii[-1])
         c_top = feot.mass_percent_o(top_x_bc)/100.0
