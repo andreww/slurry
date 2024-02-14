@@ -157,11 +157,16 @@ def evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
     # latent heat is in J s^-1 m^-3 (W/m^3)
     # So integrate M.rho.L over volume of layer to get W
     latent_heat = 0.75 * 1000000.0 # J/kg - from Davies 2015, could calculate this from the thermodynamics I think (FIXME).
-    mass_fraction_production_rate = solid_volume_production_rate * ((fe_density * solid_vf) / (fe_density * solid_vf +
-                                                              liquid_density * (1.0 - solid_vf))) # mass FRACTION per sec (i.e. units s^-1) 
+    # See emails to Chris on 14/2/2024 - I think this is right...
+    mass_fraction_production_rate = (fe_density * liquid_density * solid_volume_production_rate) \
+                                      / (fe_density * solid_vf +
+                                                     liquid_density * (1.0 - solid_vf))**2 
+    # mass FRACTION per sec (i.e. units s^-1) 
+    
     heat_production_rate = mass_fraction_production_rate * latent_heat * fe_density # W/m^3
     integrand = heat_production_rate * analysis_radii**2
     total_power_from_latent_heat = 4.0 * np.pi * np.trapz(integrand, analysis_radii) # W
+    
     if diffusion_problem:
         top_bc = tfunc(analysis_radii[-1])
         bottom_bc = 0.0
