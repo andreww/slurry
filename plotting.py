@@ -22,6 +22,62 @@ import bulk_case_runner
 # Function and supporting tools to make grid of points in dt dx space
 # note _get... functions below are there to help with the lines
 
+def plot_matches(matches_df, fig=None, ax=None):
+    """
+    Create a summary plot.
+    """
+    if (fig is None) != (ax is None):
+        raise ValueError("Must specify both fig and ax or have them both created.")
+    if (fig is None) and (ax is None):
+        # Remove 0.15 fraction of the width to match the other plot...
+        fig, ax = plt.subplots(figsize=(7-(7.0*0.15),6))
+ 
+    point_scale = 100
+    
+     
+    ax.axhline(c='k', lw=0.5, zorder=0)
+    ax.axvline(c='k', lw=0.5, zorder=0)
+    ax.set_xlim(-0.003, 0.0155)
+    ax.set_ylim(-80, 105)
+
+    for index, row in matches_df.iterrows():
+        # We need to reach into the full output for some info... grrr
+        full_data = bulk_case_runner.load_case_data(row["full_file"])
+        
+        ax.plot(row.dx, row["dt"], marker=row.marker, markerfacecolor='none',
+                markeredgecolor=row.color)#, ms=np.sqrt(full_data["growth_rate"]*point_scale))
+        
+    ax.set_ylabel("$\Delta T_{ICB}$")
+    ax.set_xlabel("$\Delta X_{ICB}$")
+
+    ax1 = inset_axes(ax, width="40%", height="60%", loc=2, borderpad=1)
+    ax1.set_yscale('log')
+    #ax1.xaxis.set_label_position('top')
+    ax1.yaxis.set_label_position('right') 
+    ax1.yaxis.tick_right()
+    #ax1.xaxis.tick_top()
+    ax1.set_ylabel("Max nucleation rate (m$^{-3}$s$^{-1}$)")
+    ax1.set_xlabel("Maximum particle radius (m)")
+    point_scale = 100
+    
+    texts = []
+    for index, row in matches_df.iterrows():
+        
+        # We need to reach into the full output for some info... grrr
+        full_data = bulk_case_runner.load_case_data(row["full_file"])        
+        ax1.plot(row["max_particle_radius"], row["max_nucleation_rate"], marker=row.marker, markerfacecolor='none',
+                markeredgecolor=row.color)#, ms=np.sqrt(full_data["growth_rate"]*point_scale))
+        
+        t = ax1.annotate(f"{full_data['growth_rate']:.1f}", (row["max_particle_radius"], row["max_nucleation_rate"]),
+                        color=row.color)
+        texts.append(t)
+        
+    adjustText.adjust_text(texts)
+
+
+    
+    plt.show()
+
 def plot_summary_figure(results_df, target_latent_heat=None, 
                         target_density_excess=None, 
                         fig=None, ax=None, marker_x=None,
