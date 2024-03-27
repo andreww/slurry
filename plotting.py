@@ -82,7 +82,7 @@ def plot_summary_figure(results_df, target_latent_heat=None,
                         target_density_excess=None, 
                         fig=None, ax=None, marker_x=None,
                         marker_t=None, marker=None, marker_color=None,
-                        include_fails=True, noplot=False):
+                        include_fails=True, noplot=False, cax=None):
     """
     Create a plot showing the heat production as a function of layer setup
     
@@ -137,19 +137,33 @@ def plot_summary_figure(results_df, target_latent_heat=None,
 
     ax.set_xlim(-0.003, 0.0155)
     ax.set_ylim(-80, 105)
-    fig.colorbar(c, label='Latent heat from snow (TW)', extend='max', 
-                 location='right',
-                 shrink=0.5, anchor=(0.0,0.9))
+    if cax is None:
+        fig.colorbar(c, label='Latent heat from snow (TW)', extend='max', 
+                     location='right',
+                     shrink=0.5, anchor=(0.0,0.9))
+    else:
+        fig.colorbar(c, label='Latent heat from snow (TW)', extend='max', 
+                     cax=cax, shrink=0.5, anchor=(0.0,0.9))
     
     # Size scale
-    ax.scatter(0.0165, -20, s=0.001*point_scale, c='k', clip_on=False)
-    ax.text(0.0175, -20, "1 mm")
-    ax.scatter(0.0165, -30, s=0.01*point_scale, c='k', clip_on=False)
-    ax.text(0.0175, -30, "1 cm")
-    ax.scatter(0.0165, -40, s=0.1*point_scale, c='k', clip_on=False)
-    ax.text(0.0175, -40, "10 cm")
-    ax.scatter(0.0165, -50, s=1.0*point_scale, c='k', clip_on=False)
-    ax.text(0.0175, -50, "1 m")
+    if include_fails:
+        ax.scatter(0.0165, -20, s=0.001*point_scale, c='k', clip_on=False)
+        ax.text(0.0175, -20, "1 mm")
+        ax.scatter(0.0165, -30, s=0.01*point_scale, c='k', clip_on=False)
+        ax.text(0.0175, -30, "1 cm")
+        ax.scatter(0.0165, -40, s=0.1*point_scale, c='k', clip_on=False)
+        ax.text(0.0175, -40, "10 cm")
+        ax.scatter(0.0165, -50, s=1.0*point_scale, c='k', clip_on=False)
+        ax.text(0.0175, -50, "1 m")
+    else:
+        ax.scatter(0.001, 90, s=0.001*point_scale, c='k', clip_on=False)
+        ax.text(0.00175, 90, "1 mm")
+        ax.scatter(0.001, 80, s=0.01*point_scale, c='k', clip_on=False)
+        ax.text(0.00175, 80, "1 cm")
+        ax.scatter(0.001, 70, s=0.1*point_scale, c='k', clip_on=False)
+        ax.text(0.00175, 70, "10 cm")
+        ax.scatter(0.001, 60, s=1.0*point_scale, c='k', clip_on=False)
+        ax.text(0.00175, 60, "1 m")
     
     # Why do the squares need to be offset?
     if marker is not None:
