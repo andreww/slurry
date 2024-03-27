@@ -22,7 +22,7 @@ import bulk_case_runner
 # Function and supporting tools to make grid of points in dt dx space
 # note _get... functions below are there to help with the lines
 
-def plot_matches(matches_df, fig=None, ax=None):
+def plot_matches(matches_df, fig=None, ax=None, noplot=False):
     """
     Create a summary plot.
     """
@@ -75,14 +75,14 @@ def plot_matches(matches_df, fig=None, ax=None):
     adjustText.adjust_text(texts)
 
 
-    
-    plt.show()
+    if not noplot:
+        plt.show()
 
 def plot_summary_figure(results_df, target_latent_heat=None, 
                         target_density_excess=None, 
                         fig=None, ax=None, marker_x=None,
                         marker_t=None, marker=None, marker_color=None,
-                        include_fails=True):
+                        include_fails=True, noplot=False):
     """
     Create a plot showing the heat production as a function of layer setup
     
@@ -167,8 +167,8 @@ def plot_summary_figure(results_df, target_latent_heat=None,
                                                             target_density_excess)
         ax.plot(density_line_dx, density_line_dt, 'k:', zorder=-1)
         
-        
-    plt.show()
+    if not noplot:    
+        plt.show()
     
     
 def _get_dt_dx_both(df, target_latent_heat, target_density_excess):
