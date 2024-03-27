@@ -25,7 +25,8 @@ import bulk_case_runner
 def plot_summary_figure(results_df, target_latent_heat=None, 
                         target_density_excess=None, 
                         fig=None, ax=None, marker_x=None,
-                        marker_t=None, marker=None, marker_color=None):
+                        marker_t=None, marker=None, marker_color=None,
+                        include_fails=True):
     """
     Create a plot showing the heat production as a function of layer setup
     
@@ -63,12 +64,13 @@ def plot_summary_figure(results_df, target_latent_heat=None,
      
     ax.axhline(c='k', lw=0.5, zorder=0)
     ax.axvline(c='k', lw=0.5, zorder=0)
-    ax.scatter(unstable_df["dx"], unstable_df["dt"], s=40, facecolors='none', 
-               edgecolors='k')
-    ax.scatter(wrong_dtdr_df["dx"], wrong_dtdr_df["dt"], s=15, facecolors='none', 
-               edgecolors='b')
-    ax.scatter(melting_df["dx"], melting_df["dt"], s=15, facecolors='none', 
-               edgecolors='r')
+    if include_fails:
+        ax.scatter(unstable_df["dx"], unstable_df["dt"], s=40, facecolors='none', 
+                   edgecolors='k')
+        ax.scatter(wrong_dtdr_df["dx"], wrong_dtdr_df["dt"], s=15, facecolors='none', 
+                   edgecolors='b')
+        ax.scatter(melting_df["dx"], melting_df["dt"], s=15, facecolors='none', 
+                   edgecolors='r')
     c = ax.scatter(snow_df["dx"], snow_df["dt"], 
                    c=np.array(snow_df["total_latent_heat"])/1.0E12,
                   norm=colors.Normalize(vmin=0.0, vmax=34), 
