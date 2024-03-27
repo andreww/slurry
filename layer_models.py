@@ -185,7 +185,7 @@ def main(input_params, cases_f, outfile, outdir=None):
         if outfile.exists():
             # Open old file and create data frame
             old_df = pd.read_csv(outfile)
-            joint_df = old_df.append(new_df)
+            joint_df = pd.concat([old_df, new_df])
             # Mode is w - overwrites
             joint_df.to_csv(outfile, index=False)
         else:
