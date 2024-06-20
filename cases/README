@@ -1,0 +1,20 @@
+Data files fori: "A non-equilibrium slurry model for planetary cores 
+with application to Earth’s F-layer"
+
+This is intended to be downloaded alongside the code (from github)
+using the pooch python module. See the main github README file
+for instructions.
+
+Inside this repository is a runbatch.sh script that will run
+all cases in folders called i0* as long as they contain 
+a parameters.yaml file (input parameters), a grid.in file
+(list of DT and DX to apply to build multiple input 
+temperature and compositon profiles) and a run.sh
+script (that actually does the running. 
+
+Example input can be found in the template directory.
+
+Input and output for all cases can be found in directories
+starting i0 ... these are not stored in github but can be
+obtained using pooch. Seting up cases to run otherwise can
+be done with a shell script and some regular expressions.
