@@ -26,9 +26,9 @@ def replace_params(infile, outfile, i0, dl, mu):
         dat = infh.read()
 
     dat = dat.replace('# This is the "Light blue square" from the paper\n', '')
-    dat = dat.replace("i0 : 1.0e-11", f"i0 : {i0}")
-    dat = dat.replace("chemical_diffusivity : 1.0e-9", f"chemical_diffusivity : {dl}")
-    dat = dat.replace("kinematic_viscosity : 2.0e-6", f"kinematic_viscosity : {mu}")
+    dat = dat.replace("i0 : 1.0e-11", f"i0 : {i0:E}")
+    dat = dat.replace("chemical_diffusivity : 1.0e-9", f"chemical_diffusivity : {dl:E}")
+    dat = dat.replace("kinematic_viscosity : 2.0e-6", f"kinematic_viscosity : {mu:E}")
 
     with open(outfile, 'w+') as outfh:
         outfh.write(dat)
