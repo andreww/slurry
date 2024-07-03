@@ -83,7 +83,7 @@ def falling_growing_particle_solution(start_time, max_time, initial_particle_siz
     return sol
 
 
-def interpolate_particle_evolution(sol, xl, t, p, dl, k0, g, mu, numpoints=500, inttimes=None):
+def interpolate_particle_evolution(sol, xl, t, p, dl, k0, g, mu, brunt_vaisala, numpoints=500, inttimes=None):
 
     if inttimes is not None:
         times = inttimes
@@ -146,11 +146,11 @@ def interpolate_particle_evolution(sol, xl, t, p, dl, k0, g, mu, numpoints=500, 
 
         
         
-def plot_particle_evolution_time(sol, xl, t, p, dl, k0, g, mu, 
+def plot_particle_evolution_time(sol, xl, t, p, dl, k0, g, mu, brunt_vaisala, 
                                  include_solution_points=False):
     
     times, rps, v_growth, lps, v_falling, re, pe_c, fr, \
-        delta_c, xl, xp = interpolate_particle_evolution(sol, xl, t, p, dl, k0, g, mu)
+        delta_c, xl, xp = interpolate_particle_evolution(sol, xl, t, p, dl, k0, g, mu, brunt_vaisala)
     
     times = times / (60*60*24) # Days seems like a generaly sensible unit for us.
 
