@@ -30,8 +30,16 @@ describing the model:
 
 ## F-layer cases
 
-Write some blurb about generating and getting access to all models.
+For the cases reported in the manuscript (in Table 1 of the SI, and in Figures 7 amd 8) we ran the models in "batch" mode,
+stored the results, and use the final notebook to plot these. The command line programme used to run a single set of cases 
+(fixed parameters, but a grid search over DT and DX looking for "Earth like" models) is `layer_models.py` which is intended
+to run in a directory and populate this with output for different temperature and composition profiles. These directories
+(and the input parameter sets) are set up by `cases/run_cases.py` which copies and modifies the files in `cases/template`
+before launching the shell script `cases/template/run.sh`. It takes a week or two (on a M1 Mac Min) to run all cases
+and this process generates approximatly 4 GB of data once compressed. We do not include this data alongside the code.
 
-## Other files
+## Other files and further development
 
-Blurb about this not being the end of the road. Development work. Refactoring needed etc.
+Some of the code (and notebooks inside `development_work`) are not used to create the models presented in this manuscript.
+These represent several alternitive lines of development and possible future work. Notably, much of the code in the repository
+is in need of refactoring ahead of further development of the work presented here. 
