@@ -4,7 +4,7 @@ These files are part of the supplementary material for the manuscript
 "Modelling the F-layer in Earth’s core as a non-equilibrium slurry"
 by A. M. Walker, C. J. Davies, A. J. Wilson and M. I. Bergman
 to be submitted to *Proceedings of the Royal Society A*. A preprint
-of this manuscript can be found [here when done](https://www.example.com).
+of this manuscript can be found [EarthArXiv](https://eartharxiv.org/).
 
 The files are source code files in python which implement the
 model described in the manuscript along with Jupyter notebook
