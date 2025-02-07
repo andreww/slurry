@@ -377,7 +377,7 @@ def plot_case_figure(data):
     ax2.tick_params(axis='y', labelcolor='g')
     ax2.yaxis.set_major_formatter(_sciformat)
 
-    ax_ins = inset_axes(ax, width="45%", height="45%", loc=1, borderpad=1)
+    ax_ins = inset_axes(ax, width="30%", height="35%", loc=1, borderpad=1)
     im = plot_csd(ax_ins, **data)
     
     #cbax = fig.add_axes((0.5,0.5,0.1,0.1))
@@ -385,9 +385,9 @@ def plot_case_figure(data):
                  shrink=0.5, anchor=(0.0,1.0))
     cb.set_label('Number of particles per m$^{3}$')
     
-    plt.figtext(0.6, 0.21, f"Latent heat production: {data['total_latent_heat']/1E12:.2g} TW", figure=fig)
+    plt.figtext(0.6, 0.21, f"Latent heat production: {data['total_latent_heat']/1E12:.1f} TW", figure=fig)
     #plt.figtext(0.6, 0.15, f"Oxygen production: {((data['total_o_rate']*s_per_ga)/m_oc)*100.0:.2g} wt.%/Ga", figure=fig)
-    plt.figtext(0.6, 0.18, f"Inner core growth: {data['growth_rate']:.2g} km/Myr", figure=fig)
+    plt.figtext(0.6, 0.18, f"Inner core growth: {data['growth_rate']:.1f} km/Myr", figure=fig)
  
     plt.show()
 

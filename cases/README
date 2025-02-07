@@ -1,20 +1,15 @@
-Data files fori: "A non-equilibrium slurry model for planetary cores 
+Cases for: "A non-equilibrium slurry model for planetary cores 
 with application to Earth’s F-layer"
 
-This is intended to be downloaded alongside the code (from github)
-using the pooch python module. See the main github README file
-for instructions.
-
-Inside this repository is a runbatch.sh script that will run
-all cases in folders called i0* as long as they contain 
-a parameters.yaml file (input parameters), a grid.in file
-(list of DT and DX to apply to build multiple input 
-temperature and compositon profiles) and a run.sh
-script (that actually does the running. 
-
-Example input can be found in the template directory.
-
-Input and output for all cases can be found in directories
-starting i0 ... these are not stored in github but can be
-obtained using pooch. Seting up cases to run otherwise can
-be done with a shell script and some regular expressions.
+The command line programme used to run a single set of cases 
+(fixed parameters, but a grid search over DT and DX looking 
+for "Earth like" models) is `layer_models.py` in the outer directory
+which is intended to run in a directory and populate this with output
+for different temperature and composition profiles. These directories
+(and the input parameter sets) are set up by `run_cases.py` in this directory
+which copies and modifies the files in `cases/template`
+before launching the shell script `cases/template/run.sh`. It takes a week or two 
+(on a M1 Mac Min in serial) to run all cases and this process generates approx
+4 GB of data once compressed. We do not include this data alongside the code.
+It is possible to run multiple instances of run_cases - they will try not to
+run the same set of parameters twice (but the approach to do this is not very robust).
