@@ -332,7 +332,7 @@ def partial_particle_density(ivp_solution, event_index, nucleation_rate, nucleat
     # Calculate the average time between nucleation events, this is the 'waiting time'
     # of Davies et al. 2019 and includes a factor of 1/2 to account for half of the 
     # particles reaching r_c then dissolving.
-    tau = 1.0/(2.0*nucleation_rate*nucleation_volume)
+    tau = 2.0/(nucleation_rate*nucleation_volume)
     delta_t = 2.0 # Time step for FD calculation
     
     # Find the time where a particle that nucleated at t=0 reached the radius of interest
@@ -548,7 +548,7 @@ def evaluate_core_growth_rate(solutions, integration_depths, nucleation_rates, r
             raise NotImplementedError
             
     area_icb = 4.0 * np.pi * radius_inner_core**2
-    growth_rate = np.trapz(particle_volumes * np.nan_to_num(nucleation_rates, nan=0.0) 
+    growth_rate = np.trapz(particle_volumes * 0.5*np.nan_to_num(nucleation_rates, nan=0.0) 
                            * integration_depths**2 * 4.0 * np.pi, 
                            integration_depths) / area_icb
     
