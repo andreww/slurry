@@ -212,7 +212,7 @@ def _get_dt_dx_latent_heat(df, target_latent_heat):
         # Skip the places where we didn't run any
         if this_dx_df.dlat_abs.min() < target_latent_heat:
             heat_line_dt.append(float(this_dx_df[this_dx_df.dlat_abs == 
-                                                 this_dx_df.dlat_abs.min()].dt))
+                                                 this_dx_df.dlat_abs.min()].dt.values[0]))
             heat_line_dx.append(this_dx)
     return heat_line_dt, heat_line_dx
 
@@ -225,7 +225,7 @@ def _get_dt_dx_excess_density(df, target_density_excess):
     for this_dt in df.dt.unique():
         this_dt_df = df[df.dt == this_dt]
         density_line_dx.append(float(this_dt_df[this_dt_df.drho_abs == 
-                                                this_dt_df.drho_abs.min()].dx))
+                                                this_dt_df.drho_abs.min()].dx.values[0]))
         density_line_dt.append(this_dt)
     return density_line_dt, density_line_dx
 

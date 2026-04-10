@@ -165,7 +165,7 @@ def evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
     
     heat_production_rate = mass_fraction_production_rate * latent_heat * fe_density # W/m^3
     integrand = heat_production_rate * analysis_radii**2
-    total_power_from_latent_heat = 4.0 * np.pi * np.trapz(integrand, analysis_radii) # W
+    total_power_from_latent_heat = 4.0 * np.pi * np.trapezoid(integrand, analysis_radii) # W
     
     if diffusion_problem:
         top_bc = tfunc(analysis_radii[-1])
@@ -189,7 +189,7 @@ def evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
     initial_c = feot.mass_percent_o(xfunc(analysis_radii))/100.0
     source_rate = initial_c * mass_fraction_production_rate # mass.% / s / m^-3
     integrand = source_rate * analysis_radii**2
-    total_mass_o_rate = 4.0 * np.pi * np.trapz(integrand, analysis_radii) # kg of O s^-2
+    total_mass_o_rate = 4.0 * np.pi * np.trapezoid(integrand, analysis_radii) # kg of O s^-2
     if diffusion_problem:
         top_x_bc = xfunc(analysis_radii[-1])
         c_top = feot.mass_percent_o(top_x_bc)/100.0
@@ -474,7 +474,7 @@ def evaluate_partcle_densities(solutions, analysis_depths, integration_depths, n
                 partial_radius[j] = 0.0
             
         # Number density of particles at this radius
-        particle_density = np.trapz(partial_densities, integration_depths)
+        particle_density = np.trapezoid(partial_densities, integration_depths)
         #particle_density = np.sum(partial_densities)
         if verbose:
             print("\nTotal particle density at r = ", analysis_r, "is", particle_density, "particles per m^3")
@@ -548,7 +548,7 @@ def evaluate_core_growth_rate(solutions, integration_depths, nucleation_rates, r
             raise NotImplementedError
             
     area_icb = 4.0 * np.pi * radius_inner_core**2
-    growth_rate = np.trapz(particle_volumes * 0.5*np.nan_to_num(nucleation_rates, nan=0.0) 
+    growth_rate = np.trapezoid(particle_volumes * 0.5*np.nan_to_num(nucleation_rates, nan=0.0) 
                            * integration_depths**2 * 4.0 * np.pi, 
                            integration_depths) / area_icb
     

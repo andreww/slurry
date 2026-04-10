@@ -243,13 +243,13 @@ class Prem(object):
             #g = self.gravity(rs)
             g = _gravity_for_pressure(rs, self.mass_poly.coeffs, self.mass_poly.breakpoints)
             rho = self.density(rs)
-            ps = spint.cumtrapz((-g*rho)[::-1],rs[::-1]*1000.0, initial=0)
+            ps = spint.cumulative_trapezoid((-g*rho)[::-1],rs[::-1]*1000.0, initial=0)
             pressure = ps[-1]/1E9
         else:
             # Assume I have been fed something I can integrate
             g = self.gravity(r)
             rho = self.density(r)
-            pressure = spint.cumtrapz((-g*rho)[::-1],
+            pressure = spint.cumulative_trapezoid((-g*rho)[::-1],
                                       r[::-1]*1000.0, initial=0)
             pressure = pressure[::-1]/1E9
         return pressure

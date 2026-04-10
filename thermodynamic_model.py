@@ -192,7 +192,7 @@ def end_member_free_energy(p, t, a, b, c, d, e, f, v0, k0, kp, a0, ag0, k):
     vs = vinet_eos_volumes(ps, v0, k0, kp)
     vs = expand_volume(vs, t, v0, a0, ag0, k) # in cm^3/mol
     # Worry about units here -> GPa and cm^3 converted to Pa and m^3
-    vdp = np.trapz(vs * 1.0E-6, ps * 1.0E9) 
+    vdp = np.trapezoid(vs * 1.0E-6, ps * 1.0E9) 
     g_onebar = free_energy_onebar(t, a, b, c, d, e, f)
     g_pt = g_onebar + vdp                     # Result in J
     return g_pt
