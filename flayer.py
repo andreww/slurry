@@ -239,7 +239,10 @@ def evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
                                              liquid_composition = xfunc(analysis_radii),
                                              mass_fraction_solid_production_rate = mass_fraction_production_rate,
                                              heat_production_rate = heat_production_rate,
-                                             o_prod_rate = source_rate)
+                                             o_prod_rate = source_rate,
+                                             liquid_density = liquid_density,
+                                             solid_density = fe_density,
+                                             solid_volume_fraction = solid_vf)
 
     return solutions, particle_densities, growth_rate, solid_vf, \
         particle_radius_unnormalised, partial_particle_densities, \
