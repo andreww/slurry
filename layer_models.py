@@ -20,7 +20,7 @@ import layer_setup
 
 prem = earth_model.Prem()
 
-def run_case(case_name, delta_t_icb, delta_x_icb, this_i0, input_params):
+def run_case(case_name, delta_t_icb, delta_x_icb, this_i0, input_params, verbose=False):
     cases_dict = collections.defaultdict(list) # For output
     # Mass of outer core - for o prod unit conversion
     m_oc = prem.mass(input_params["r_cmb"]/1000.0, r_inner=input_params["r_icb"]/1000.0)
@@ -95,11 +95,11 @@ def run_case(case_name, delta_t_icb, delta_x_icb, this_i0, input_params):
             solutions, particle_densities, growth_rate, solid_vf, \
             particle_radii, partial_particle_densities, crit_nuc_radii, \
             nucleation_rates, _, _, total_latent_heat, total_o_rate, \
-            solid_excess_density = flayer.evaluate_flayer(
+            solid_excess_density, profiles = flayer.evaluate_flayer(
                 temperature_function, composition_function, pressure_function, gravity_function,
                 0.0, 1.0E20, k0, dl, k, mu, i0, surf_energy, wetting_angle, hetrogeneous_radius,
                 nucleation_radii, analysis_radii, r_icb, 
-                r_flayer_top, Nbv, verbose=False, silent=True, diffusion_problem=False)
+                r_flayer_top, Nbv, verbose=verbose, silent=True, diffusion_problem=False)
         except (AssertionError, ValueError) as error:
             print("Something went wrong in this point:")
             print(error)
@@ -130,6 +130,7 @@ def run_case(case_name, delta_t_icb, delta_x_icb, this_i0, input_params):
             output_data["solid_excess_density"] = solid_excess_density
             
             output_data["analysis_radii"] = analysis_radii
+            output_data["profiles"] = profiles
         
             
         

@@ -10,6 +10,7 @@ import earth_model
 import nucleation
 import layer_diffusion
 import layer_setup
+import data_models
 
 
 # Functions to build and evaluate models fo the F-layer
@@ -217,9 +218,9 @@ def evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
             print("Radius (km), P (GPa), Guess T (K), Guess X, dm/dt (kg/s), Q (W/m^3), O prod rate")
         for i, r in enumerate(analysis_radii):
             if diffusion_problem:
-                print(f"{r/1000.0:4g} {pfunc(r):3g} {tfunc(r):4g} {xfunc(r):4g} {mass_production_rate[i]:.3g} {heat_production_rate[i]:.3g} {source_rate[i]:.3g} {t_points_out[i]:4g} {xl_points_out[i]:4g}")
+                print(f"{r/1000.0:4g} {pfunc(r):3g} {tfunc(r):4g} {xfunc(r):4g} {mass_fraction_production_rate[i]:.3g} {heat_production_rate[i]:.3g} {source_rate[i]:.3g} {t_points_out[i]:4g} {xl_points_out[i]:4g}")
             else:
-                print(f"{r/1000.0:4g} {pfunc(r):3g} {tfunc(r):4g} {xfunc(r):4g} {mass_production_rate[i]:.3g} {heat_production_rate[i]:.3g} {source_rate[i]:.3g}")
+                print(f"{r/1000.0:4g} {pfunc(r):3g} {tfunc(r):4g} {xfunc(r):4g} {mass_fraction_production_rate[i]:.3g} {heat_production_rate[i]:.3g} {source_rate[i]:.3g}")
     elif not silent:
         if diffusion_problem:
             print("Radius (km), P (GPa), Guess T (K), Guess X, dm/dt (kg/s), Q (W/m^3), O prod rate, Calculated T (K), Calculated X")
@@ -228,14 +229,22 @@ def evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
         for i, r in enumerate(analysis_radii):
             if i%(len(analysis_radii)//10) == 0: 
                 if diffusion_problem:
-                    print(f"{r/1000.0:4g} {pfunc(r):3g} {tfunc(r):4g} {xfunc(r):4g} {mass_production_rate[i]:.3g} {heat_production_rate[i]:.3g} {source_rate[i]:.3g} {t_points_out[i]:4g} {xl_points_out[i]:4g}")
+                    print(f"{r/1000.0:4g} {pfunc(r):3g} {tfunc(r):4g} {xfunc(r):4g} {mass_fraction_production_rate[i]:.3g} {heat_production_rate[i]:.3g} {source_rate[i]:.3g} {t_points_out[i]:4g} {xl_points_out[i]:4g}")
                 else:
-                    print(f"{r/1000.0:4g} {pfunc(r):3g} {tfunc(r):4g} {xfunc(r):4g} {mass_production_rate[i]:.3g} {heat_production_rate[i]:.3g} {source_rate[i]:.3g}")     
-        
+                    print(f"{r/1000.0:4g} {pfunc(r):3g} {tfunc(r):4g} {xfunc(r):4g} {mass_fraction_production_rate[i]:.3g} {heat_production_rate[i]:.3g} {source_rate[i]:.3g}")     
+
+    profiles = data_models.solution_profiles(radius = analysis_radii,
+                                             pressure = pfunc(analysis_radii),
+                                             temperature = tfunc(analysis_radii),
+                                             liquid_composition = xfunc(analysis_radii),
+                                             mass_fraction_solid_production_rate = mass_fraction_production_rate,
+                                             heat_production_rate = heat_production_rate,
+                                             o_prod_rate = source_rate)
+
     return solutions, particle_densities, growth_rate, solid_vf, \
         particle_radius_unnormalised, partial_particle_densities, \
         crit_nuc_radii, nucleation_rates, t_points_out, xl_points_out, \
-        total_power_from_latent_heat, total_mass_o_rate, solid_excess_density
+        total_power_from_latent_heat, total_mass_o_rate, solid_excess_density, profiles
 
 
 def analyse_flayer(solutions, integration_radii, analysis_radii, nucleation_rates, radius_inner_core,
