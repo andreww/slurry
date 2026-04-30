@@ -28,3 +28,26 @@ class solution_profiles:
         assert self.radius.shape == self.liquid_density.shape, "radius-liquidrho miss match"
         assert self.radius.shape == self.solid_density.shape, "radius-solidrho miss match"
         assert self.radius.shape == self.solid_volume_fraction.shape, "radius-solidvf miss match"
+
+@dataclass(kw_only=True, frozen=True)
+class particle_histograms:
+    """
+    The population of particles is represented by 2D arrays
+    indexed first by the location where we look at the particle
+    property (radius here) and second by the location where the
+    particle nucleated. So, the population of particle velocities
+    at radius[i] is given by particle_velocities[i,:], for example.
+    When interpreting these arrays remember that particles will only
+    be found below (smaller r) than their own nuc_radius.
+    """
+    radius: np.ndarray # Radius (location) of solution points, in m
+    nuc_radius: np.ndarray # Radius (location) of particle nucleation, in m
+    particle_size: np.ndarray # Radius (size) of the particle, m
+    particle_density: np.ndarray # Number density of particles, particles/m^3
+    particle_velocity: np.ndarray # Velocity of particle, m/s
+
+    def __post_init__(self):
+        expected_shape = (self.radius.shape[0], self.nuc_radius.shape[0])
+        assert self.particle_size.shape == expected_shape, "particle_size array mismatch"
+        assert self.particle_density.shape == expected_shape, "particle_density array mismatch"
+        assert self.particle_velocity.shape == expected_shape, "particle_velocity array mismatch"

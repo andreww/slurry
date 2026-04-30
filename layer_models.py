@@ -95,7 +95,7 @@ def run_case(case_name, delta_t_icb, delta_x_icb, this_i0, input_params, verbose
             solutions, particle_densities, growth_rate, solid_vf, \
             particle_radii, partial_particle_densities, crit_nuc_radii, \
             nucleation_rates, _, _, total_latent_heat, total_o_rate, \
-            solid_excess_density, profiles = flayer.evaluate_flayer(
+            solid_excess_density, profiles, particle_histograms = flayer.evaluate_flayer(
                 temperature_function, composition_function, pressure_function, gravity_function,
                 0.0, 1.0E20, k0, dl, k, mu, i0, surf_energy, wetting_angle, hetrogeneous_radius,
                 nucleation_radii, analysis_radii, r_icb, 
@@ -131,6 +131,7 @@ def run_case(case_name, delta_t_icb, delta_x_icb, this_i0, input_params, verbose
             
             output_data["analysis_radii"] = analysis_radii
             output_data["profiles"] = profiles
+            output_data["particle_histograms"] = particle_histograms
         
             
         

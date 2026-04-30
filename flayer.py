@@ -118,7 +118,7 @@ def evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
     # Calculate an initial guess using the provided liquid compositioon
     solutions, particle_densities, growth_rate, solid_vf, \
         particle_radius_unnormalised, partial_particle_densities, \
-        solid_volume_production_rate, mean_particle_velocities = integrate_snow_zone(
+        solid_volume_production_rate, mean_particle_velocities, particle_histograms = integrate_snow_zone(
         analysis_radii, radius_inner_core, radius_top_flayer, nucleation_radii, 
         nucleation_rates, tfunc, xfunc, pfunc, gfunc,
         start_time, max_time, crit_nuc_radii, k0, dl, mu, brunt_vaisala, verbose=verbose)
@@ -247,7 +247,8 @@ def evaluate_flayer(tfunc, xfunc, pfunc, gfunc, start_time, max_time,
     return solutions, particle_densities, growth_rate, solid_vf, \
         particle_radius_unnormalised, partial_particle_densities, \
         crit_nuc_radii, nucleation_rates, t_points_out, xl_points_out, \
-        total_power_from_latent_heat, total_mass_o_rate, solid_excess_density, profiles
+        total_power_from_latent_heat, total_mass_o_rate, solid_excess_density, \
+        profiles, particle_histograms
 
 
 def analyse_flayer(solutions, integration_radii, analysis_radii, nucleation_rates, radius_inner_core,
@@ -428,6 +429,7 @@ def evaluate_partcle_densities(solutions, analysis_depths, integration_depths, n
     solid_volume_production_rate = np.zeros_like(analysis_depths)
     partial_particle_densities = np.zeros((analysis_depths.size, integration_depths.size))
     particle_radius_unnormalised = np.zeros((analysis_depths.size, integration_depths.size))
+    particle_velocities_histogram = np.zeros((analysis_depths.size, integration_depths.size))
     mean_particle_velocities = np.zeros_like(analysis_depths)
     for i, analysis_r in enumerate(analysis_depths):
         analysis_index = i + 2
@@ -474,16 +476,19 @@ def evaluate_partcle_densities(solutions, analysis_depths, integration_depths, n
                 particle_radius_unnormalised[i,j] = 0.0
                 partial_particle_densities[i,j] = 0.0
                 partial_radius[j] = 0.0
+                particle_velocities_histogram[i,j] = 0.0
             elif solutions[j].t_events[analysis_index].size > 0:
                 # Triggered event - no check for double crossing as partial_particle_density will have done this
                 particle_radius_unnormalised[i,j] = solutions[j].y_events[analysis_index][0][0]
                 partial_particle_densities[i,j] = partial_densities[j]
                 partial_radius[j] = particle_radius_unnormalised[i,j]
+                particle_velocities_histogram[i,j] = partial_velocities[j]
             else:
                 # Melted etc
                 particle_radius_unnormalised[i,j] = 0.0
                 partial_particle_densities[i,j] = 0.0
                 partial_radius[j] = 0.0
+                particle_velocities_histogram[i,j] = 0.0
             
         # Number density of particles at this radius
         particle_density = np.trapezoid(partial_densities, integration_depths)
@@ -511,9 +516,17 @@ def evaluate_partcle_densities(solutions, analysis_depths, integration_depths, n
         mean_particle_velocities[i] = np.mean((partial_densities * partial_velocities) /
                                           np.sum(partial_densities))
         
+    particle_histograms = data_models.particle_histograms(
+        radius = analysis_depths,
+        nuc_radius = integration_depths,
+        particle_size = particle_radius_unnormalised,
+        particle_density = partial_particle_densities,
+        particle_velocity = particle_velocities_histogram
+    )
+        
     return particle_densities, solid_vf, particle_radius_unnormalised, \
                    partial_particle_densities, solid_volume_production_rate, \
-                   mean_particle_velocities
+                   mean_particle_velocities, particle_histograms
 
 
 def evaluate_particle_seperation(particle_densities, analysis_depths, verbose=True):
@@ -605,7 +618,7 @@ def integrate_snow_zone(analysis_depths, radius_inner_core, radius_top_flayer, i
     
     particle_densities, solid_vf, particle_radius_unnormalised, \
     partial_particle_densities, solid_volume_production_rate, \
-    mean_particle_velocities = evaluate_partcle_densities(
+    mean_particle_velocities, particle_histograms = evaluate_partcle_densities(
         solutions, analysis_depths, integration_depths, nucleation_rates,
         radius_inner_core, radius_top_flayer, verbose=verbose)
     
@@ -613,6 +626,6 @@ def integrate_snow_zone(analysis_depths, radius_inner_core, radius_top_flayer, i
     
     return solutions, particle_densities, growth_rate, solid_vf, \
            particle_radius_unnormalised, partial_particle_densities, \
-           solid_volume_production_rate, mean_particle_velocities
+           solid_volume_production_rate, mean_particle_velocities, particle_histograms
     
     
