@@ -45,9 +45,16 @@ class particle_histograms:
     particle_size: np.ndarray # Radius (size) of the particle, m
     particle_density: np.ndarray # Number density of particles, particles/m^3
     particle_velocity: np.ndarray # Velocity of particle, m/s
+    particle_volume_growth_rate: np.ndarray # How fast is the particle volume growing, m^3/s
+    particle_age: np.ndarray # How old is the particle, s
+
 
     def __post_init__(self):
+        assert len(self.radius.shape) == 1, "Radius (position) must be 1D"
+        assert len(self.nuc_radius.shape) == 1, "Nucleation radius (position) must be 1D"
         expected_shape = (self.radius.shape[0], self.nuc_radius.shape[0])
         assert self.particle_size.shape == expected_shape, "particle_size array mismatch"
         assert self.particle_density.shape == expected_shape, "particle_density array mismatch"
         assert self.particle_velocity.shape == expected_shape, "particle_velocity array mismatch"
+        assert self.particle_volume_growth_rate.shape == expected_shape, "particle_growth_rate array mismatch"
+        assert self.particle_age.shape == expected_shape, "particle_age array mismatch"

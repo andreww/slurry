@@ -8,6 +8,7 @@
 import collections
 import pathlib
 import pickle
+import traceback
 
 import yaml
 import numpy as np
@@ -103,6 +104,7 @@ def run_case(case_name, delta_t_icb, delta_x_icb, this_i0, input_params, verbose
         except (AssertionError, ValueError) as error:
             print("Something went wrong in this point:")
             print(error)
+            traceback.print_exception(error)
             cases_dict["total_latent_heat"].append(None)
             cases_dict["total_o_rate"].append(None)
             cases_dict["max_particle_radius"].append(None)  

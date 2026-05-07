@@ -340,7 +340,7 @@ def partial_particle_density(ivp_solution, event_index, nucleation_rate, nucleat
     if ivp_solution is None:
         if verbose:
             print("No ivp solution - particle not formed")
-        return 0.0, 0.0, 0.0
+        return 0.0, 0.0, 0.0, 0.0
     
     # Calculate the average time between nucleation events, this is the 'waiting time'
     # of Davies et al. 2019 and includes a factor of 1/2 to account for half of the 
@@ -381,7 +381,7 @@ def partial_particle_density(ivp_solution, event_index, nucleation_rate, nucleat
         else:
             if verbose:
                 print("cannot process if next particle has yet to form")
-            return 0.0, 0.0, 0.0
+            return 0.0, 0.0, 0.0, 0.0
         if (analysis_time + tau) < ivp_solution.t[-1]:
             distance_below = analysis_radius - ivp_solution.sol(analysis_time + tau)[1]
             radius_after = ivp_solution.sol(analysis_time + delta_t)[0]
@@ -393,7 +393,7 @@ def partial_particle_density(ivp_solution, event_index, nucleation_rate, nucleat
         else:
             if verbose:
                 print("cannot process if previous particle has gone")
-            return 0.0, 0.0, 0.0
+            return 0.0, 0.0, 0.0, 0.0
         s_v = (0.5 * (distance_below + distance_above))
         particle_volume_growth_rate = ((4/3) * np.pi * (radius_after**3 - radius_before**3)) / (2.0 * delta_t) 
         partial_density = 1/(analysis_area * s_v) # /m^3 - see notebook!
@@ -411,10 +411,11 @@ def partial_particle_density(ivp_solution, event_index, nucleation_rate, nucleat
         partial_density = 0.0
         particle_volume_growth_rate = 0.0
         particle_velocity = 0.0
+        analysis_time = 0.0
         if verbose:
             print("No event data (e.g. dissolved) so partical density is zero")
         
-    return partial_density, particle_volume_growth_rate, particle_velocity
+    return partial_density, particle_volume_growth_rate, particle_velocity, analysis_time
 
 
 # Total particle density and solid volume fraction calculation
@@ -431,6 +432,8 @@ def evaluate_partcle_densities(solutions, analysis_depths, integration_depths, n
     particle_radius_unnormalised = np.zeros((analysis_depths.size, integration_depths.size))
     particle_velocities_histogram = np.zeros((analysis_depths.size, integration_depths.size))
     mean_particle_velocities = np.zeros_like(analysis_depths)
+    particle_ages_histogram = np.zeros((analysis_depths.size, integration_depths.size))
+    particle_growth_rate_histogram = np.zeros((analysis_depths.size, integration_depths.size))
     for i, analysis_r in enumerate(analysis_depths):
         analysis_index = i + 2
         # Particle density at this depth is 'just' the partial density
@@ -441,6 +444,7 @@ def evaluate_partcle_densities(solutions, analysis_depths, integration_depths, n
         partial_radius = np.zeros_like(integration_depths)
         particle_volume_growth_rate = np.zeros_like(integration_depths)
         partial_velocities = np.zeros_like(integration_depths)
+        partial_times = np.zeros_like(integration_depths)
         for j, int_r in enumerate(integration_depths):
             # Skip if this will be zero - avoid noise
             if analysis_r > int_r:
@@ -468,7 +472,8 @@ def evaluate_partcle_densities(solutions, analysis_depths, integration_depths, n
             nuc_vol = nuc_area * nuc_height
             if verbose:
                 print("\nPartial density calc for r =", analysis_r, "with nuc at r =", int_r)
-            partial_densities[j], particle_volume_growth_rate[j], partial_velocities[j] = partial_particle_density(solutions[j],
+            partial_densities[j], particle_volume_growth_rate[j], partial_velocities[j], partial_times[j]\
+                  = partial_particle_density(solutions[j],
                                             analysis_index, nuc_rate, nuc_vol, num_areas, verbose=verbose)
             
             # Put radius at this radius and nuc radius in radius histogram
@@ -477,18 +482,24 @@ def evaluate_partcle_densities(solutions, analysis_depths, integration_depths, n
                 partial_particle_densities[i,j] = 0.0
                 partial_radius[j] = 0.0
                 particle_velocities_histogram[i,j] = 0.0
+                particle_growth_rate_histogram[i,j] = 0.0
+                particle_ages_histogram[i,j] = 0.0
             elif solutions[j].t_events[analysis_index].size > 0:
                 # Triggered event - no check for double crossing as partial_particle_density will have done this
                 particle_radius_unnormalised[i,j] = solutions[j].y_events[analysis_index][0][0]
                 partial_particle_densities[i,j] = partial_densities[j]
                 partial_radius[j] = particle_radius_unnormalised[i,j]
                 particle_velocities_histogram[i,j] = partial_velocities[j]
+                particle_growth_rate_histogram[i,j] = particle_volume_growth_rate[j]
+                particle_ages_histogram[i,j] = partial_times[j]
             else:
                 # Melted etc
                 particle_radius_unnormalised[i,j] = 0.0
                 partial_particle_densities[i,j] = 0.0
                 partial_radius[j] = 0.0
                 particle_velocities_histogram[i,j] = 0.0
+                particle_growth_rate_histogram[i,j] = 0.0
+                particle_ages_histogram[i,j] = 0.0
             
         # Number density of particles at this radius
         particle_density = np.trapezoid(partial_densities, integration_depths)
@@ -521,7 +532,9 @@ def evaluate_partcle_densities(solutions, analysis_depths, integration_depths, n
         nuc_radius = integration_depths,
         particle_size = particle_radius_unnormalised,
         particle_density = partial_particle_densities,
-        particle_velocity = particle_velocities_histogram
+        particle_velocity = particle_velocities_histogram,
+        particle_volume_growth_rate = particle_growth_rate_histogram,
+        particle_age = particle_ages_histogram
     )
         
     return particle_densities, solid_vf, particle_radius_unnormalised, \
