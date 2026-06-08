@@ -397,6 +397,9 @@ def partial_particle_density(ivp_solution, event_index, nucleation_rate, nucleat
         s_v = (0.5 * (distance_below + distance_above))
         particle_volume_growth_rate = ((4/3) * np.pi * (radius_after**3 - radius_before**3)) / (2.0 * delta_t) 
         partial_density = 1/(analysis_area * s_v) # /m^3 - see notebook!
+        # The following is just distance over time, but distance is downwards so the 
+        # velocity is positive down. Hence we need to multiply by -1 later to 
+        # match our global frame (positive up). We do this later when building the historgramme.
         particle_velocity = (distance_below + distance_above) / travel_time
         if verbose:
             print("Nucleation rate = ", nucleation_rate, "nuc_vol = ", nucleation_volume)
@@ -489,7 +492,7 @@ def evaluate_partcle_densities(solutions, analysis_depths, integration_depths, n
                 particle_radius_unnormalised[i,j] = solutions[j].y_events[analysis_index][0][0]
                 partial_particle_densities[i,j] = partial_densities[j]
                 partial_radius[j] = particle_radius_unnormalised[i,j]
-                particle_velocities_histogram[i,j] = partial_velocities[j]
+                particle_velocities_histogram[i,j] = -1.0 * partial_velocities[j] # Switch from pve down to pve up.
                 particle_growth_rate_histogram[i,j] = particle_volume_growth_rate[j]
                 particle_ages_histogram[i,j] = partial_times[j]
             else:
