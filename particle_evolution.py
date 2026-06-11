@@ -265,7 +265,6 @@ def _derivatives_of_ode(t, y, xln, temperaturein, pressurein, dl,
     if verbose:
         print('Derivative evaluation at', t, 's, at z=', z, ', rp = ', rp)
         print('At this point T =', temperature, 'K, P =', pressure, 'GPa, xl =', xl, '(mol frac Fe), g =', g, 'm/s^2')
-        print(type(pressure), type(xl))
         
     
     # Density calculation
@@ -284,6 +283,9 @@ def _derivatives_of_ode(t, y, xln, temperaturein, pressurein, dl,
     # at the interface, which depends on the growth rate and boundary layer thickness. We optimise for
     # the composition at the inside of the boundary laer
     v, xp = growth.diffusion_growth_velocity(xl, delta, pressure, temperature, dl, k0)
+
+    if verbose:
+        print(' dz/dt=', v_falling, ', drp/dt = ', v, 'delta=', delta, 'xp=', xp)
     
     return [v, v_falling]
 
