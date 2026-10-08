@@ -13,13 +13,13 @@ import traceback
 import yaml
 import numpy as np
 import pandas as pd
+import premlike
 
 import flayer
 import feo_thermodynamics as feot
-import earth_model
 import layer_setup
 
-prem = earth_model.Prem()
+prem = premlike.PREM
 
 def run_case(case_name, delta_t_icb, delta_x_icb, this_i0, input_params, verbose=False):
     cases_dict = collections.defaultdict(list) # For output

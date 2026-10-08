@@ -1219,6 +1219,18 @@ wheels = [
 ]
 
 [[package]]
+name = "premlike"
+version = "0.1.0a2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/78/43/268dcd00e399c1bf234b964dbfa4bfd8e9ada5379fe3b39017a824965425/premlike-0.1.0a2.tar.gz", hash = "sha256:cb002821de128f0b76459b8f37c2b2f314fbb2b50cbacdbcf5d8a6fcdcc6b34e", size = 16783, upload-time = "2025-12-12T12:40:53.296Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ad/0a/ad88c61bd7d43f3c835d4a295b6fe0e2c9298f3a926efe41632d2c7f13bc/premlike-0.1.0a2-py3-none-any.whl", hash = "sha256:ee407f74e53ebf175432d0212f03ecdf824d49c6febbcad8a7f0cf7919ac5067", size = 13441, upload-time = "2025-12-12T12:40:52.077Z" },
+]
+
+[[package]]
 name = "prometheus-client"
 version = "0.25.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1579,6 +1591,7 @@ dependencies = [
     { name = "numba" },
     { name = "numpy" },
     { name = "pandas" },
+    { name = "premlike" },
     { name = "pytest" },
     { name = "scipy" },
 ]
@@ -1591,6 +1604,7 @@ requires-dist = [
     { name = "numba", specifier = ">=0.65.0" },
     { name = "numpy", specifier = ">=2.4.4" },
     { name = "pandas", specifier = ">=3.0.2" },
+    { name = "premlike", specifier = ">=0.1.0a2" },
     { name = "pytest", specifier = ">=9.1.1" },
     { name = "scipy", specifier = ">=1.17.1" },
 ]

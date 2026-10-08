@@ -1,7 +1,7 @@
 import numpy as np
 import scipy.optimize as spo
+import premlike
 
-import earth_model
 import feo_thermodynamics as feot
 import scipy.interpolate as spi
 
@@ -44,7 +44,7 @@ def setup_flayer_functions(r_icb, r_cmb, f_layer_thickness, gruneisen_parameter,
     """
     r_flayer_top = r_icb + f_layer_thickness
     # Base P and g on PREM...
-    prem = earth_model.Prem()
+    prem = premlike.PREM
     
     # First find the liquidus temperature at the top of the F-layer... we know P (from PREM)
     # and X (from our input). NB: my PREM module works in km and does not like vector input.

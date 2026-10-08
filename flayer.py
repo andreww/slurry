@@ -6,7 +6,6 @@ import scipy.interpolate as spi
 
 import particle_evolution
 import feo_thermodynamics as feot
-import earth_model
 import nucleation
 import layer_diffusion
 import layer_setup

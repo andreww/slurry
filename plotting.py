@@ -12,9 +12,10 @@ from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
 import adjustText
 
+import premlike
+
 import flayer
 import feo_thermodynamics as feot
-import earth_model
 import layer_setup
 import bulk_case_runner
 
@@ -267,7 +268,7 @@ def make_layer_plot(dt, dx, xfe_outer_core, r_icb=1221.5E3,
     rs = np.linspace(r_icb, r_flayer_top+100.0E3)
 
     # Check PREM works ... and print some interesting values
-    prem = earth_model.Prem()
+    prem = premlike.PREM
     print("Pressure at ICB:", prem.pressure(r_icb/1000.0), "GPa")
     print("Pressure at top of F-layer", prem.pressure(r_flayer_top/1000.0), "GPa")
     print("g at ICB:", prem.gravity(r_icb/1000.0), "m/s**2")
@@ -363,7 +364,7 @@ def _sciformat(x, pos=None):
 
 def plot_case_figure(data):
     
-    prem = earth_model.Prem()
+    prem = premlike.PREM
     m_oc = prem.mass(3480.0, r_inner=1221.5)
     s_per_ga = 60.0*60.0*24.0*365.0*1.0E9
     
